@@ -7,151 +7,174 @@ A Typora-style WYSIWYG Markdown editor built on ProseMirror.
 ```
 md text  ───────┐                                          (IO boundary; on-disk format)
                parse / serialize (doc must round-trip losslessly)
-PM doc + selection  ───── single source of truth          (runtime authority)
-  ↕ deriveDecorations(state)  — derived, never stored
+PM doc + selection  ───── runtime authority
+  │   textblock text keeps source delim chars (`*`, `**`, `` ` ``, `~~`)
+  │   inline marks = derived each transaction by `normalize` (method B)
+  ↓
+deriveDecorations + normalize delims  — inline / widget decorations
 view (DOM, built by PM EditorView)
 ```
 
-- **Runtime authority** is `EditorState = { doc, selection, storedMarks, plugins }`. All transactions, input rules and decoration logic live at the PM doc layer.
+- **Runtime authority** is `EditorState = { doc, selection, storedMarks, plugins }`. Transactions and decoration logic live at the PM doc layer.
 - **md is not reactive**: it only appears at load / save / "show source" boundaries.
+- **Method B**: for every inline feature (em/strong/code/strike), the textblock's textContent contains the source delim chars verbatim and the corresponding mark is derived in `normalize.ts`'s `appendTransaction` by running `parseInline`. Flip side: those delim chars round-trip through the serializer raw (not `\*` escaped), because they *are* the md source.
 - **Lossless round-trip** is an invariant over nodes/marks/attrs only. `selection`, `history`, decorations, IME state are ephemeral.
 - See `~/.claude/projects/-Users-yanzhen-fiddle-typora-web/memory/project_state_model.md` for the original rationale.
 
 ## File map
 
+### Core
+
 | File | Responsibility |
 |---|---|
-| `schema.ts` | PM schema (nodes + marks + attrs). **Every allowed document shape is defined here** — this is the executor of the "schema is the whitelist" rule. |
-| `parser.ts` | md → PM doc. Built on markdown-it. Stack-based `ParserState`; each token is mapped to a schema node/mark. |
-| `serializer.ts` | PM doc → any string format. `SerializerState` handles block prefixes, the delim stack, pmPos tracking and `PosMarker` injection. Mark delimiters and character escaping are pluggable (`SerializerConfig`); md uses `mdConfig`, other consumers pass their own. |
-| `decorations.ts` | `deriveDecorations(state)` — pure function that expands active marks around the cursor into `DecoSpan`s. `syntaxHintsPlugin()` turns those spans into widget decorations that render the gray source delimiters. |
-| `cursor-render.ts` | `cursorRenderPlugin()` — paints the selection as a widget. Empty selection uses `<span class="play-caret">`, non-empty uses `selection-marker` on both ends. Dynamic `side`: if the caret lands on a gray boundary it uses ±2 to stay on the visual outside. |
-| `input-rules.ts` | Markdown trigger rules (e.g. `*x*` → em) plus `spaceBreaksStoredMarks` (a space exits the freshly created mark). |
-| `editor.ts` | `defaultPlugins()` — the plugin stack shared by the live editor and the headless pretty printer. |
-| `events.ts` | `feedEvent(view, e)` — translates the event DSL into a transaction. The view parameter only needs `{state, dispatch, endOfTextblock, hasFocus}`; both a real EditorView and the test fakeView satisfy it. |
-| `test-utils.ts` | `setup(md)` / `apply(state, events)` / `pretty(state)` — the three-piece test surface. `pretty` is re-exported from test-pretty. |
-| `test-pretty.ts` | Spins up a real `EditorView` in happy-dom, converts `view.dom` to HTML-ish text. **No custom renderer** — pure projection. |
-| `main.ts` | Visualisation harness (preset / step / play / speed). Uses the same `defaultPlugins()` as tests. |
+| `schema.ts` | PM schema. Merges `coreNodes`/`coreMarks` (doc/paragraph/text/hard_break/heading/blockquote/code_block/lists/link) with `collectNodes()`/`collectMarks()` from features. |
+| `parser.ts` | md → PM doc. `ParserState` is exported for features. Core block/inline tokens handled inline; feature tokens dispatched through `collectParserTokens()`. Registered `mdItPlugins` run on the singleton markdown-it instance. |
+| `serializer.ts` | PM doc → md. Mark delimiters come from `collectMarkDelims()`; each inline feature's `extRanges(parent)` marks the chars that must be emitted raw (no backslash escape) so method-B delim chars survive round-trip. |
+| `inline-parse.ts` | Method-B inline parser. Utilities: `scanRuns`, `scanFixedDelim`, `markConsumed`, `markExtRanges`. Orchestration: `parseInline(text)` runs every inline feature's `scan` in ascending `priority`, sharing a `consumed` bitmap. |
+| `normalize.ts` | The authoritative "text → marks" step. `appendTransaction` walks every textblock, runs `parseInline`, and syncs em/strong/code/strike marks. Plugin state exposes `delim` ranges for decorations. |
+| `decorations.ts` | Two paths. **Widget** (legacy, currently only link): `deriveDecorations` expands active marks around the cursor into `DecoSpan`s, rendered as widget decos. **Inline** (method B): `getDelims(state)` gives delim ranges; each gets `Decoration.inline` with class `syntax-hint` (cursor in surrounding span) or `syntax-hidden` (outside). |
+| `cursor-render.ts` | `cursorRenderPlugin()` — paints the selection as a widget. Empty selection → `<span class="play-caret">`, non-empty → `selection-marker` on both ends. Dynamic `side`. |
+| `input-rules.ts` | Thin shell: `inputRules({ rules: collectInputRules(schema) })` + `spaceBreaksStoredMarks`. Under method B, em/strong/code/strike do NOT register input rules — normalize handles everything. Input rules remain the right tool for features like link that aren't delim-pair shaped. |
+| `editor.ts` | `defaultPlugins()`: history / keymap / input-rules / space-breaks / **normalizeInlinePlugin** / syntaxHints / cursorRender / baseKeymap. Same stack in live editor and test pretty. |
+| `events.ts` | `feedEvent(view, e)` — translates the event DSL into a transaction. View surface is minimal (`{state, dispatch, endOfTextblock, hasFocus}`). |
+| `test-utils.ts` | `setup(md)` / `apply(state, events)` / `pretty(state)` + `runFeatureCases(feature)` — the feature test driver. |
+| `test-pretty.ts` | Spins up a real `EditorView` in happy-dom; walks `view.dom` to HTML-ish text. Feature-contributed `renderCases` map wins over the core switch. Skips `syntax-hidden` spans (delim char visually absent). |
+| `main.ts` | Visualisation harness. `SCRIPTS = featureScripts (from collectCases()) + coreScripts (hand-written plain/cursor/history)` — one data source for both assertions and the harness. |
+
+### Features (`src/features/`)
+
+| File | Owns |
+|---|---|
+| `_types.ts` | `FeatureSpec`, `InlineFeatureSpec`, `Case`, `Checkpoint`, `TokenHandler`, `RenderCase`. |
+| `index.ts` | `ALL_FEATURES` registry plus `collectX()` helpers that core modules read. Adding a feature = one import + one array entry. |
+| `emphasis.ts` | em + strong. Merged because they share one `*` runs scanner (strong wins when both ends have ≥ 2 chars). |
+| `code.ts` | inline code `` `x` `` (priority 0, wins over emphasis). |
+| `strike.ts` | strike `~~x~~` (priority 1). Enables markdown-it's strikethrough rule via `mdItPlugins`. |
 
 ## Architectural invariants
 
-1. **Schema is the whitelist.** Every doc shape the schema allows must be losslessly serialisable to md. The three pieces live or die together:
+1. **Schema is the whitelist.** Every doc shape the schema allows must be losslessly serialisable to md. For each syntax the trio must stay in sync:
    - schema node/mark
    - parser token → node/mark mapping
-   - serializer mark delimiters / block handlers
+   - serializer delimiters / block handlers
 
-2. **pretty is a projection of the real view DOM.** `test-pretty.ts` runs a real `EditorView` in happy-dom, so cursor position, decoration ordering and mark nesting are all decided by PM.
-   - Do not reintroduce a standalone renderer inside test-pretty — that path caused snapshot/view drift once already.
+2. **pretty is a projection of the real view DOM.** `test-pretty.ts` runs a real `EditorView` in happy-dom, so cursor position, decoration ordering, mark nesting are all decided by PM.
+   - Do not reintroduce a standalone renderer — that path caused snapshot/view drift once already.
 
-3. **One plugin stack.** `defaultPlugins()` is used by both the real view and the test pretty. Cursor rendering, decorations and input rules all go through it, so test and production behaviour stay aligned.
+3. **One plugin stack.** `defaultPlugins()` is used by both the real view and the test pretty. Cursor, decorations, normalize and input rules all go through it.
+
+4. **Method-B reverses ownership for inline marks.** Text in the doc is the source (contains delim chars). `normalize.ts` is the single authority that turns text into mark structure. Do NOT manually add/remove em/strong/code/strike marks in feature code or other plugins — normalize will overwrite on the next transaction. If a new inline syntax needs different semantics, extend `parseInline` and normalize.
+
+5. **Features are self-contained.** Every cross-cutting seam (schema / parser token / serializer delim / decoration class / input rule / inline scanner / test-pretty renderCase / cases) is declared inside the feature's file. Core modules only orchestrate via `collectX()`. This is what lets multiple agents develop features in parallel with minimal conflict surface.
 
 ## How to add a Markdown syntax
 
-Worked example: strikethrough `~~x~~` → an `<s>` mark.
+Worked example: an inline-mark feature (the three existing ones emphasis / code / strike are the reference templates).
 
-1. **schema.ts** — declare the mark spec:
+1. **Create `src/features/<name>.ts`** exporting a `FeatureSpec`:
+   - `marks` — PM mark spec (parseDOM/toDOM).
+   - `parserTokens` — markdown-it token handlers. For method-B marks, open/close handlers emit the delim chars via `state.addText` *and* push/pop the mark:
+     ```ts
+     em_open:  (s, _, schema) => { s.addText("*"); s.openMark(schema.marks.em.create()); },
+     em_close: (s, _, schema) => { s.closeMarkType(schema.marks.em); s.addText("*"); },
+     ```
+   - `markDelims` — serializer delim table. Method-B marks use `{ open: "", close: "" }` because the delim chars already live in the text.
+   - `renderCases` — tag → HTML-ish DSL (e.g. `em: (c) => \`<i>${c}</i>\``).
+   - `inline` (for method-B inline marks):
+     ```ts
+     inline: {
+       priority: 2,                                      // code 0, strike 1, emphasis 2
+       scan:      (text, consumed) => /* emit InlineSpans */,
+       markNames: ["em", "strong"],
+       extRanges: (parent) => markExtRanges(parent, "em", 1),
+     }
+     ```
+     `scanFixedDelim` in `inline-parse.ts` covers most fixed-length delim cases.
+   - `cases` — one or more `Case = {id, label, seed, events, checkpoints}`. Each `Checkpoint = {at, expect}` is an independent test; `at` is the number of events to feed before asserting. The full `events` stream also becomes a harness preset.
+   - `mdItPlugins` — if the syntax isn't in CommonMark (e.g. strikethrough: `[(md) => md.enable("strikethrough")]`).
+2. **Create `src/features/<name>.test.ts`**:
    ```ts
-   strike: { parseDOM: [{ tag: "s" }, { tag: "del" }], toDOM: () => ["s", 0] }
+   import { runFeatureCases } from "../test-utils.ts";
+   import { myFeature } from "./myFeature.ts";
+   runFeatureCases(myFeature);
    ```
-2. **parser.ts** — add the token handlers:
-   ```ts
-   case "s_open": state.openMark(marks.strike.create()); return;
-   case "s_close": state.closeMarkType(marks.strike); return;
-   ```
-   (Also enable the markdown-it strikethrough plugin — CommonMark does not include it.)
-3. **serializer.ts** — extend `mdConfig.marks`:
-   ```ts
-   strike: { open: "~~", close: "~~" }
-   ```
-4. **decorations.ts** — extend the `DELIM` table:
-   ```ts
-   strike: { open: "~~", close: "~~" }
-   ```
-5. **test-pretty.ts** — add the tag case to `renderNode`:
-   ```ts
-   case "s": case "del": return `<s>${children}</s>`;
-   ```
-6. **Round-trip test** — add `roundTripStable("~~x~~")` to `roundtrip.test.ts`.
-7. **Behaviour test** — add the TDD case to `typora.test.ts`.
+3. **Register** in `src/features/index.ts`: one `import` + one entry in `ALL_FEATURES`.
+4. Run `npx vp test --run` — feature cases + roundtrip + parser tests all need to stay green.
 
-Block-level nodes (e.g. task lists) take two extra steps: add a block handler in serializer's `blockHandlers`, and add the tag case to `renderNode`.
-
-## How to add an input rule (Typora trigger behaviour)
-
-Worked example: `**x**` → strong.
-
-1. **input-rules.ts**:
-   ```ts
-   const STRONG_PATTERN = /(?<!\*)\*\*([^*\s](?:[^*]*[^*\s])?)\*\*$/;
-   const strongRule = new InputRule(STRONG_PATTERN, (state, match, start, end) => {
-     const captured = match[1]!;
-     const m = schema.marks.strong.create();
-     return state.tr
-       .delete(start, end)
-       .insert(start, schema.text(captured, [m]))
-       .setStoredMarks([m]); // keeps the cursor "inside the mark" visually
-   });
-   ```
-   Add it to the `rules` array inside `markdownInputRules()`.
-2. The em and strong regexes must lookbehind past each other (`(?<!\*)`), otherwise em would chew off half of a strong trigger.
-3. `spaceBreaksStoredMarks` already handles "space exits after creation" — no extra work.
+For marks that don't fit the delim-pair shape (link, image) the feature owns a widget-path decoration entry in `decorationDelims` and either an input rule or its own inline scanner. Block-level syntaxes additionally need `nodes` + serializer block handlers; that block-level surface hasn't been exercised yet.
 
 ## Test DSL
 
-### pretty output format (what assertions compare against)
+### pretty output format
 
 | Symbol | Meaning |
 |---|---|
-| plain chars | verbatim |
-| `<i>…</i>` | em (italic) |
+| plain chars | verbatim (including method-B delim chars when the cursor is outside the mark's span — they are visually hidden via `.syntax-hidden`, and test-pretty emits nothing for them) |
+| `<i>…</i>` | em |
 | `<b>…</b>` | strong |
 | `<c>…</c>` | inline code |
+| `<s>…</s>` | strike |
 | `<l:url>…</l>` | link |
-| `<g>*</g>`, `<g>**</g>`, … | gray source delimiter shown when the cursor is inside the mark |
+| `<g>*</g>`, `<g>**</g>`, `` <g>`</g> ``, `<g>~~</g>` | gray source delimiter shown when the cursor is inside the mark's surrounding span |
 | `|` | empty-selection caret |
 | `[…]` | non-empty selection |
-| `# `, `- `, `1. `, `> `, ```\`\`\`lang\n…\n\`\`\` ```, `---`, `<br/>` | block and inline md-ish structure |
+| `# `, `- `, `1. `, `> `, ```\`\`\`lang\n…\n\`\`\` ```, `---`, `<br/>` | block / inline structure |
 
 ### Event DSL
 
 - Single-character string — one character (`"a"`, `"*"`, `" "`).
 - `<Key>` form for special keys: `<Enter>` `<Backspace>` `<Tab>` `<ArrowLeft>` `<Home>` `<End>` `<Delete>`.
-- `<Mod-X>` — cross-platform, the runner maps to Meta or Ctrl based on `navigator.platform`.
+- `<Mod-X>` — cross-platform, mapped to Meta or Ctrl based on `navigator.platform`.
 - Multi-character strings are fed character by character (so `"hello"` behaves the same as `"h","e","l","l","o"`).
 
 ## TDD rhythm
 
-When adding a new behaviour (example: `**x**` → strong):
+The canonical loop for a new inline feature:
 
-1. **Write the red test first** in `typora.test.ts`:
+1. **Write red cases** in `src/features/<name>.ts`. A case = seed + events + checkpoints:
    ```ts
-   test("**1** — bold input rule", () => {
-     expect(pretty(apply(setup(""), ["*","*","1","*","*"]))).toBe(
-       "<g>**</g><b>1</b><g>**</g>|"
-     );
-   });
+   cases: [
+     {
+       id: "asterisks",
+       label: "italic via single asterisks",
+       seed: "",
+       events: ["*","1","*"," "],
+       checkpoints: [
+         { at: 3, expect: "<g>*</g><i>1</i><g>*</g>|" },
+         { at: 4, expect: "<i>1</i> |" },
+       ],
+     },
+   ],
    ```
-2. `npx vp test --run typora` — confirm it is red.
-3. Implement the input rule plus whatever schema/parser/serializer/decoration changes are needed.
-4. Run again; expect green.
-5. Add the same events to `SCRIPTS` in `main.ts`, open the dev server and eyeball it (the view and the snapshot must agree because they share a renderer).
+   `runFeatureCases(feature)` expands each checkpoint into an independent `test()` — intermediate invariants stay covered.
+2. `npx vp test --run features/<name>` — confirm it's red.
+3. Fill in schema / parser / serializer / renderCases / inline scanner / decorationDelims.
+4. Run again; expect green. Same `events` array shows up in the harness as a preset automatically (via `collectCases`) — open `npm run dev` and eyeball step-by-step.
 
 ### Guiding principles
-- **Assertions describe what the user sees**, not internal state shapes. `pretty` comes from the real view DOM, so the assertion is a visual contract.
-- When unsure about the expected behaviour, **ask for a manually verified case** and reverse-engineer the implementation. Do not guess specs.
-- Prefer PM primitives. `defining` / `isolating` / `marks:""` / `inclusive:false` / parseDOM priority often cover what would otherwise be reinvented. Non-obvious flags should be explained in a comment or pinned with a test.
+
+- **Assertions describe what the user sees**, not internal state. `pretty` comes from the real view DOM, so the assertion is a visual contract.
+- When unsure about expected behaviour, **ask for a manually verified Typora case** and reverse-engineer. Do not guess specs.
+- Prefer PM primitives: `defining` / `isolating` / `marks:""` / `inclusive:false` / parseDOM priority. Non-obvious flags should be explained in a comment or pinned with a test.
+- Under method B, don't try to "set the right mark at input time" — let normalize do it. Your input-rule/typing logic should only mutate text; mark structure comes from a subsequent `appendTransaction`.
 
 ## Visualisation harness (main.ts)
 
-`npm run dev` opens the harness. Select a preset → Reset → Step/Play to watch the editor evolve under a scripted event stream. The bottom panels show `pretty()` and `serialize()` in real time so they can be compared with test assertions.
-
-`SCRIPTS` in main.ts mirrors the cases in `typora.test.ts` — copying an `events` array across turns one into a visual demo and vice versa.
+`npm run dev` opens the harness. Select a preset → Reset → Step/Play to watch the editor evolve under a scripted event stream. `pretty()` and `serialize()` panels are rendered alongside so they can be compared with test assertions. `SCRIPTS` is assembled from `collectCases()` (one entry per feature case) plus a small hand-written set of core presets — copying an `events` array across turns one into a visual demo and vice versa without any manual sync.
 
 ## Known gotchas
 
-- **`navigator.platform`** — Node 22 ships with a `navigator` global whose platform is `"MacIntel"`, so PM normalises `Mod` to `Meta`. `events.ts` already branches on it; do not assume `Mod === Ctrl`.
-- **`tr.insertText` and storedMarks fallback** — when `storedMarks` is `null` or `[]`, PM falls back to `$from.marks()`, and an inclusive mark will re-attach. To insert text with genuinely no marks, build the text node directly with `schema.text(text)` and use `tr.replaceWith`.
+- **`navigator.platform`** — Node 22 ships with a `navigator` global whose platform is `"MacIntel"`, so PM normalises `Mod` to `Meta`. `events.ts` already branches on it.
+- **`tr.insertText` and storedMarks fallback** — when `storedMarks` is `null`/`[]`, PM falls back to `$from.marks()`; an inclusive mark will re-attach. To insert text with genuinely no marks, build the text node directly with `schema.text(text)` and use `tr.replaceWith`.
 - **Widget ordering** — multiple widgets at the same PM position render in ascending `side`. To keep the caret on the outside of a mark boundary, its widget uses a dynamic `side` (see `cursor-render.ts`).
-- **PM widget class list** — PM appends `ProseMirror-widget` to every widget element, so test-pretty uses `classList.contains("play-caret")` rather than a string equality check.
+- **PM widget class list** — PM appends `ProseMirror-widget` to every widget element, so test-pretty uses `classList.contains(...)`.
 - **Trailing `<br class="ProseMirror-trailingBreak">`** — PM inserts a placeholder into empty textblocks. test-pretty filters it out.
 - **Headless env startup** — happy-dom adds ~700ms to cold-start the test environment. Each test itself remains fast.
+- **Method B: hidden delims still occupy PM positions.** Arrow keys may briefly land on a `.syntax-hidden` `*` — the delim becomes visible again once the cursor enters the surrounding span. Don't try to "skip" these positions unless you also rewrite cursor-render coordination.
+- **Normalize runs every transaction.** Writing your own plugin that mutates inline marks will race with normalize (normalize wins). Change text, not marks.
+
+## Method-B limitations carried forward
+
+- **Nesting**: `parseInline` only recognises the outermost pair — `***both***` ends up as strong(em(…)) in md-it parse but normalize will rebuild it as just strong. Revisit when inline parse grows a nesting pass.
+- **Backtick-fence upgrade**: `` `` ` `` `` (double backtick fence with embedded single backtick) isn't recognised — `roundtrip.test` for this case is `.skip`ped. Requires variable-length code fence support in both parser-token emission and `inline-parse` code scanner.
+- **Link**: still on the legacy widget + input-rule path; not migrated to method B yet. See follow-up work.
