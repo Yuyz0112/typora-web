@@ -1,6 +1,8 @@
 import { Schema, type NodeSpec, type MarkSpec } from "prosemirror-model";
 
-const nodes: Record<string, NodeSpec> = {
+import { collectMarks, collectNodes } from "./features/index.ts";
+
+const coreNodes: Record<string, NodeSpec> = {
   doc: { content: "block+" },
 
   paragraph: {
@@ -101,22 +103,7 @@ const nodes: Record<string, NodeSpec> = {
   },
 };
 
-const marks: Record<string, MarkSpec> = {
-  strong: {
-    parseDOM: [{ tag: "strong" }, { tag: "b" }],
-    toDOM: () => ["strong", 0],
-  },
-
-  em: {
-    parseDOM: [{ tag: "em" }, { tag: "i" }],
-    toDOM: () => ["em", 0],
-  },
-
-  code: {
-    parseDOM: [{ tag: "code" }],
-    toDOM: () => ["code", 0],
-  },
-
+const coreMarks: Record<string, MarkSpec> = {
   link: {
     attrs: {
       href: {},
@@ -138,5 +125,8 @@ const marks: Record<string, MarkSpec> = {
     },
   },
 };
+
+const nodes = { ...coreNodes, ...collectNodes() };
+const marks = { ...coreMarks, ...collectMarks() };
 
 export const schema = new Schema({ nodes, marks });

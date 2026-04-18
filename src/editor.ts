@@ -7,6 +7,7 @@ import { history, undo, redo } from "prosemirror-history";
 import { cursorRenderPlugin } from "./cursor-render.ts";
 import { syntaxHintsPlugin } from "./decorations.ts";
 import { markdownInputRules, spaceBreaksStoredMarks } from "./input-rules.ts";
+import { normalizeInlinePlugin } from "./normalize.ts";
 import { schema } from "./schema.ts";
 
 export function defaultPlugins(): Plugin[] {
@@ -15,6 +16,7 @@ export function defaultPlugins(): Plugin[] {
     keymap({ "Mod-z": undo, "Mod-y": redo, "Mod-Shift-z": redo }),
     markdownInputRules(),
     spaceBreaksStoredMarks(),
+    normalizeInlinePlugin(),
     syntaxHintsPlugin(),
     cursorRenderPlugin(),
     keymap(baseKeymap),

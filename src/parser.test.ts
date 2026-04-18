@@ -77,14 +77,20 @@ describe("parser: block nodes", () => {
 
 describe("parser: inline marks", () => {
   test("strong and em", () => {
+    // Typora-pilot (method B): parser keeps the `*` delim chars as plain
+    // text in the doc, and the mark covers only the content. The content
+    // text + delim text both live in the textblock; normalize maintains
+    // the invariant at runtime.
     const doc = parse("**bold** and *italic*");
     const p = doc.child(0);
     const fragments: Array<{ text: string | undefined; marks: string[] }> = [];
     p.forEach((child) => fragments.push({ text: child.text, marks: child.marks.map((m) => m.type.name) }));
     expect(fragments).toEqual([
+      { text: "**", marks: [] },
       { text: "bold", marks: ["strong"] },
-      { text: " and ", marks: [] },
+      { text: "** and *", marks: [] },
       { text: "italic", marks: ["em"] },
+      { text: "*", marks: [] },
     ]);
   });
 
@@ -113,10 +119,22 @@ describe("parser: inline marks", () => {
   });
 
   test("nested marks: strong+em", () => {
+    // markdown-it emits em_open → strong_open → text → strong_close → em_close,
+    // so em is the outer mark: the `*` delims on the outside carry no mark,
+    // the inner `**` delims carry em, and the content carries em+strong.
     const doc = parse("***both***");
     const p = doc.child(0);
-    const names = p.child(0).marks.map((m) => m.type.name).sort();
-    expect(names).toEqual(["em", "strong"]);
+    const fragments: Array<{ text: string | undefined; marks: string[] }> = [];
+    p.forEach((child) =>
+      fragments.push({ text: child.text, marks: child.marks.map((m) => m.type.name).sort() }),
+    );
+    expect(fragments).toEqual([
+      { text: "*", marks: [] },
+      { text: "**", marks: ["em"] },
+      { text: "both", marks: ["em", "strong"] },
+      { text: "**", marks: ["em"] },
+      { text: "*", marks: [] },
+    ]);
   });
 
   test("hard break vs soft break", () => {

@@ -46,6 +46,13 @@ html, body { margin: 0; padding: 0; font: 16px/1.6 -apple-system, system-ui, san
   font-style: normal;
   user-select: none;
 }
+/* Delim char is present in the doc text but visually absent when the cursor
+ * is outside the mark's surrounding span. PM pos still tracks it, so arrow
+ * keys may briefly land on a hidden delim — fine, it becomes visible as
+ * soon as the cursor enters the span. */
+.ProseMirror .syntax-hidden {
+  font-size: 0;
+}
 .ProseMirror .play-caret {
   display: inline-block;
   width: 2px;

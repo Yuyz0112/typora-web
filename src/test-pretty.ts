@@ -12,6 +12,10 @@
 import { EditorState } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 
+import { collectRenderCases } from "./features/index.ts";
+
+const featureRenderCases = collectRenderCases();
+
 // ─────────────────────────────────────────────────────────────────────────────
 // DOM → test DSL text
 // ─────────────────────────────────────────────────────────────────────────────
@@ -36,6 +40,7 @@ function renderNode(n: Node): string {
   // so use classList.contains rather than a strict className comparison.
   if (tag === "span") {
     if (list.contains("syntax-hint")) return `<g>${el.textContent ?? ""}</g>`;
+    if (list.contains("syntax-hidden")) return ""; // delim char present in text, visually hidden
     if (list.contains("play-caret")) return "|";
     if (list.contains("selection-marker")) return el.textContent ?? "";
   }
@@ -44,6 +49,9 @@ function renderNode(n: Node): string {
   if (tag === "br" && list.contains("ProseMirror-trailingBreak")) return "";
 
   const children = Array.from(el.childNodes).map(renderNode).join("");
+
+  const featureCase = featureRenderCases[tag];
+  if (featureCase) return featureCase(children, el);
 
   switch (tag) {
     case "p":
@@ -55,14 +63,6 @@ function renderNode(n: Node): string {
     case "h5":
     case "h6":
       return `${"#".repeat(Number(tag[1]))} ${children}`;
-    case "em":
-    case "i":
-      return `<i>${children}</i>`;
-    case "strong":
-    case "b":
-      return `<b>${children}</b>`;
-    case "code":
-      return `<c>${children}</c>`;
     case "a": {
       const href = el.getAttribute("href") ?? "";
       return `<l:${href}>${children}</l>`;

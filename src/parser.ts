@@ -8,13 +8,17 @@ import {
   type NodeType,
 } from "prosemirror-model";
 
+import { collectMdItPlugins, collectParserTokens } from "./features/index.ts";
 import { schema } from "./schema.ts";
 
 const md: MarkdownIt = new MarkdownIt("commonmark", { html: false });
+for (const plugin of collectMdItPlugins()) md.use(plugin);
+
+const featureTokens = collectParserTokens();
 
 type Frame = { type: NodeType; attrs: Attrs | null; content: PMNode[] };
 
-class ParserState {
+export class ParserState {
   private stack: Frame[] = [{ type: schema.nodes.doc, attrs: null, content: [] }];
   private marks: readonly Mark[] = Mark.none;
 
@@ -120,10 +124,11 @@ function handleBlock(state: ParserState, token: Token): void {
       for (const child of token.children ?? []) handleInline(state, child);
       return;
     }
-    default:
-      // Silently ignore tokens outside the v0 whitelist; extending the
-      // schema requires adding the matching case here.
+    default: {
+      const handler = featureTokens[token.type];
+      if (handler) handler(state, token, schema);
       return;
+    }
   }
 }
 
@@ -140,23 +145,6 @@ function handleInline(state: ParserState, token: Token): void {
     case "hardbreak":
       state.push(nodes.hard_break.create());
       return;
-    case "code_inline":
-      state.openMark(marks.code.create());
-      state.addText(token.content);
-      state.closeMarkType(marks.code);
-      return;
-    case "strong_open":
-      state.openMark(marks.strong.create());
-      return;
-    case "strong_close":
-      state.closeMarkType(marks.strong);
-      return;
-    case "em_open":
-      state.openMark(marks.em.create());
-      return;
-    case "em_close":
-      state.closeMarkType(marks.em);
-      return;
     case "link_open": {
       const href = token.attrGet("href") ?? "";
       const title = token.attrGet("title");
@@ -166,8 +154,11 @@ function handleInline(state: ParserState, token: Token): void {
     case "link_close":
       state.closeMarkType(marks.link);
       return;
-    default:
+    default: {
+      const handler = featureTokens[token.type];
+      if (handler) handler(state, token, schema);
       return;
+    }
   }
 }
 

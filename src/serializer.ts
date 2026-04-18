@@ -1,5 +1,6 @@
 import type { Mark, Node as PMNode } from "prosemirror-model";
 
+import { collectInlineFeatures, collectMarkDelims } from "./features/index.ts";
 import { schema } from "./schema.ts";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -27,23 +28,26 @@ const mdEscapeInline = (ch: string): string =>
 const mdEscapeBlockStart = (ch: string): string =>
   /[#\->+*_]/.test(ch) ? `\\${ch}` : mdEscapeInline(ch);
 
-export const mdConfig: SerializerConfig = {
-  marks: {
-    strong: { open: "**", close: "**" },
-    em: { open: "*", close: "*" },
-    link: {
-      open: "[",
-      close: (mark) => {
-        const href = String(mark.attrs.href ?? "");
-        const title = mark.attrs.title as string | null;
-        return title ? `](${href} "${title.replace(/"/g, '\\"')}")` : `](${href})`;
-      },
+const coreMdMarks: Record<string, MarkSpec> = {
+  link: {
+    open: "[",
+    close: (mark) => {
+      const href = String(mark.attrs.href ?? "");
+      const title = mark.attrs.title as string | null;
+      return title ? `](${href} "${title.replace(/"/g, '\\"')}")` : `](${href})`;
     },
-    code: { open: "", close: "" }, // handled via backtick fence below
   },
+};
+
+export const mdConfig: SerializerConfig = {
+  marks: { ...coreMdMarks, ...collectMarkDelims() },
   escapeInline: mdEscapeInline,
   escapeBlockStart: mdEscapeBlockStart,
-  codeMarkAsBacktickFence: true,
+  // Under method-B the `` ` `` delim chars live in the textblock text, so
+  // the standard mark-open/close channel (with empty code markDelims) plus
+  // the extRanges no-escape is enough. The backtick-fence path stays in
+  // the code for potential non-md consumers that set it back to true.
+  codeMarkAsBacktickFence: false,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -144,6 +148,18 @@ class SerializerState {
     let active: readonly Mark[] = [];
     const marks = this.config.marks;
 
+    // Under method-B, each inline feature declares which char ranges are
+    // its source delim + content (extRanges). Inside these ranges the text
+    // already encodes md, so backslash escape must be suppressed.
+    const extRanges: Array<[number, number]> = collectInlineFeatures().flatMap((f) =>
+      f.extRanges(parent),
+    );
+    let blockOffset = 0;
+    const insideEmStrong = (o: number): boolean => {
+      for (const [a, b] of extRanges) if (o >= a && o < b) return true;
+      return false;
+    };
+
     // We deliberately do not fire "inner" ticks during mark transitions —
     // the cursor only fires at A/B/E (block edges or text chars). That keeps
     // a cursor exactly on a mark boundary on the visual outside of the mark,
@@ -186,6 +202,7 @@ class SerializerState {
           this.tick("inner");
           this.out += ch;
           this.advance(1);
+          blockOffset++;
         }
         this.tick("inner");
         this.out += pad + fence;
@@ -199,7 +216,7 @@ class SerializerState {
         this.out += "  \n";
         if (this.delim) this.out += this.delim;
         this.advance(1);
-        return;
+        return; // hard_break doesn't contribute to textContent offsets
       }
 
       if (!child.isText) return;
@@ -216,6 +233,9 @@ class SerializerState {
         if (ch === "\n") {
           this.out += "\n";
           if (this.delim) this.out += this.delim;
+        } else if (insideEmStrong(blockOffset)) {
+          this.out += ch; // raw — char already encodes md source
+          sawNonNewline = true;
         } else {
           const needBlockEsc = atBlockStart && !sawNonNewline;
           this.out += needBlockEsc
@@ -223,6 +243,7 @@ class SerializerState {
             : this.config.escapeInline(ch);
           sawNonNewline = true;
         }
+        blockOffset++;
         this.advance(1);
       }
     });

@@ -4,6 +4,7 @@ import { EditorView } from "prosemirror-view";
 
 import { defaultPlugins } from "./editor.ts";
 import { feedEvent, type Event } from "./events.ts";
+import { collectCases } from "./features/index.ts";
 import { parse } from "./parser.ts";
 import { serialize } from "./serializer.ts";
 import { schema } from "./schema.ts";
@@ -13,8 +14,11 @@ import "prosemirror-view/style/prosemirror.css";
 import "./style.css";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Preset visualisation scripts — same shape as the cases in typora.test.ts
-// so "cases are the spec" in both places.
+// Preset visualisation scripts. Feature scenarios come straight from each
+// feature's `cases` array — one data source for both assertions and the
+// harness, so they never drift. A handful of core/editor presets (typing,
+// cursor, history) are hand-written below since they're not tied to any
+// syntax feature.
 // ─────────────────────────────────────────────────────────────────────────────
 
 type Script = {
@@ -24,10 +28,14 @@ type Script = {
   events: Event[];
 };
 
-const SCRIPTS: Script[] = [
-  { id: "italic-rule", label: "italic: *1*<space>", seed: "", events: ["*", "1", "*", " "] },
-  { id: "italic-word", label: "italic: *hello*<space>world", seed: "",
-    events: ["*", "h", "e", "l", "l", "o", "*", " ", "w", "o", "r", "l", "d"] },
+const featureScripts: Script[] = collectCases().map((c) => ({
+  id: `${c.feature}-${c.id}`,
+  label: `${c.feature}: ${c.label}`,
+  seed: c.seed,
+  events: c.events,
+}));
+
+const coreScripts: Script[] = [
   { id: "plain-typing", label: "plain: hello world", seed: "", events: ["hello world"] },
   { id: "cursor-move", label: "cursor: type+home+type", seed: "",
     events: ["a", "b", "c", "<Home>", "x", "y"] },
@@ -35,6 +43,8 @@ const SCRIPTS: Script[] = [
     events: ["<Backspace>", "<Backspace>"] },
   { id: "undo", label: "undo: type+undo", seed: "", events: ["a", "b", "c", "<Mod-z>"] },
 ];
+
+const SCRIPTS: Script[] = [...featureScripts, ...coreScripts];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DOM layout
@@ -60,11 +70,11 @@ root.innerHTML = `
       <div class="next">next: <code id="next-event">—</code></div>
     </div>
     <div class="pane pane-editor" id="editor"></div>
-    <details class="dump">
+    <details class="dump" open>
       <summary>pretty() snapshot</summary>
       <pre id="pretty-dump"></pre>
     </details>
-    <details class="dump">
+    <details class="dump" open>
       <summary>serialize() (md)</summary>
       <pre id="md-dump"></pre>
     </details>

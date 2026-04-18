@@ -1,11 +1,14 @@
+import { describe, expect, test } from "@voidzero-dev/vite-plus-test";
 import { EditorState, TextSelection, type Transaction } from "prosemirror-state";
 
 import { createState } from "./editor.ts";
 import { type Event, feedEvent, type ViewLike } from "./events.ts";
+import type { FeatureSpec } from "./features/_types.ts";
 import { parse } from "./parser.ts";
 import { schema } from "./schema.ts";
+import { pretty } from "./test-pretty.ts";
 
-export { pretty } from "./test-pretty.ts";
+export { pretty };
 export type { Event } from "./events.ts";
 
 // fakeView for headless tests — wires plugin dispatches back into state.apply
@@ -38,4 +41,22 @@ export function apply(state: EditorState, events: Event[]): EditorState {
   const view = fakeView(state);
   for (const e of events) feedEvent(view, e);
   return view.state;
+}
+
+// Run every checkpoint across every case of a feature as an independent test.
+// Each feature.test.ts becomes a one-liner; the expansion shape (describe
+// feature → describe case.label → test "at N") stays uniform so failures
+// read consistently in the runner output.
+export function runFeatureCases(feature: FeatureSpec): void {
+  describe(feature.name, () => {
+    for (const c of feature.cases ?? []) {
+      describe(c.label, () => {
+        for (const cp of c.checkpoints) {
+          test(`at ${cp.at}`, () => {
+            expect(pretty(apply(setup(c.seed), c.events.slice(0, cp.at)))).toBe(cp.expect);
+          });
+        }
+      });
+    }
+  });
 }

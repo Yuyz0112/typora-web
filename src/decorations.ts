@@ -2,16 +2,31 @@
 // inside a mark range, show the source delimiters (*, **, `, …) as a gray
 // hint glued to each end of the mark.
 //
-// This module exposes both a pure `deriveDecorations(state)` (consumed by the
-// test pretty printer) and a `syntaxHintsPlugin()` (mounts a DecorationSet on
-// a real EditorView). A single rule, two consumers.
+// Two paths coexist while the Typora-pilot migration is underway:
+//
+//   1. WIDGET path (legacy, used by code/strike/link): the mark's doc text
+//      does NOT contain the source delim chars. deriveDecorations finds the
+//      mark boundary around the cursor, and a widget Decoration is mounted
+//      at each end to render the gray delim.
+//
+//   2. INLINE path (method-B, used by em/strong): the mark's doc text DOES
+//      contain the delim chars. The normalize plugin exposes their ranges;
+//      here we wrap each delim range in an inline Decoration whose class
+//      tells the stylesheet (and test-pretty) whether to display it gray
+//      (cursor in the surrounding span) or hide it (cursor out of range).
 
 import type { Mark, Node as PMNode } from "prosemirror-model";
 import { Plugin, PluginKey, type EditorState } from "prosemirror-state";
 import { Decoration, DecorationSet } from "prosemirror-view";
 
+import { collectDecorationDelims, collectInlineFeatures } from "./features/index.ts";
+import { getDelims } from "./normalize.ts";
+
+// Mark names owned by the inline (method-B) path. Widget path skips these.
+const inlinePathMarks = new Set(collectInlineFeatures().flatMap((f) => f.markNames));
+
 // ─────────────────────────────────────────────────────────────────────────────
-// Pure: which mark ranges should display a gray source delimiter hint.
+// Widget path — mark-boundary based.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type DecoSpan = { from: number; to: number; mark: Mark };
@@ -55,22 +70,16 @@ function expandMarkRange(parent: PMNode, offset: number, mark: Mark): [number, n
   return [segs[lo]!.start, segs[hi]!.end];
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Source-delimiter text for each mark type.
-// ─────────────────────────────────────────────────────────────────────────────
-
-const DELIM: Record<string, { open: string; close: string }> = {
-  em: { open: "*", close: "*" },
-  strong: { open: "**", close: "**" },
-  code: { open: "`", close: "`" },
+const coreDelims: Record<string, { open: string; close: string }> = {
   link: { open: "[", close: "]" },
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// PM plugin: render the source delimiters into the real view as widget decos.
-// ─────────────────────────────────────────────────────────────────────────────
+const DELIM: Record<string, { open: string; close: string }> = {
+  ...coreDelims,
+  ...collectDecorationDelims(),
+};
 
-function makeWidget(char: string): (view: unknown, getPos: () => number | undefined) => HTMLElement {
+function makeWidget(char: string): () => HTMLElement {
   return () => {
     const el = document.createElement("span");
     el.className = "syntax-hint";
@@ -79,19 +88,34 @@ function makeWidget(char: string): (view: unknown, getPos: () => number | undefi
   };
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Plugin
+// ─────────────────────────────────────────────────────────────────────────────
+
 function buildDecorationSet(state: EditorState): DecorationSet {
-  const spans = deriveDecorations(state);
-  if (spans.length === 0) return DecorationSet.empty;
   const decos: Decoration[] = [];
-  for (const s of spans) {
-    const d = DELIM[s.mark.type.name];
+
+  // Widget path — only for marks whose text does NOT contain the delim
+  // chars (currently link). Any mark that an inline feature claims goes
+  // through the inline path below instead.
+  for (const s of deriveDecorations(state)) {
+    const name = s.mark.type.name;
+    if (inlinePathMarks.has(name)) continue;
+    const d = DELIM[name];
     if (!d) continue;
-    // `side` positions the widget relative to other widgets at the same PM pos:
-    // gray open at -1 sits before any inner content; gray close at +1 sits after.
     decos.push(Decoration.widget(s.from, makeWidget(d.open), { side: -1 }));
     decos.push(Decoration.widget(s.to, makeWidget(d.close), { side: 1 }));
   }
-  return DecorationSet.create(state.doc, decos);
+
+  // Inline path — em/strong delim chars live in text.
+  const cursor = state.selection.empty ? state.selection.from : null;
+  for (const d of getDelims(state)) {
+    const visible = cursor !== null && cursor >= d.spanFrom && cursor <= d.spanTo;
+    const cls = visible ? "syntax-hint" : "syntax-hidden";
+    decos.push(Decoration.inline(d.from, d.to, { class: cls }));
+  }
+
+  return decos.length > 0 ? DecorationSet.create(state.doc, decos) : DecorationSet.empty;
 }
 
 const syntaxHintsKey = new PluginKey<DecorationSet>("syntaxHints");

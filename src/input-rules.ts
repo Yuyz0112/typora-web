@@ -1,29 +1,11 @@
-import { InputRule, inputRules } from "prosemirror-inputrules";
+import { inputRules } from "prosemirror-inputrules";
 import { Plugin } from "prosemirror-state";
 
+import { collectInputRules } from "./features/index.ts";
 import { schema } from "./schema.ts";
 
-// `*text*` → em mark on "text".
-// - Negative lookbehind `(?<!\*)` keeps this rule from chewing into `**bold**`
-//   when a strong rule is added later.
-// - No whitespace allowed immediately inside the asterisks, so `* foo*` and
-//   `*foo *` do not trigger.
-const EM_PATTERN = /(?<!\*)\*([^*\s](?:[^*]*[^*\s])?)\*$/;
-
-const emRule = new InputRule(EM_PATTERN, (state, match, start, end) => {
-  const captured = match[1]!;
-  const em = schema.marks.em.create();
-  const tr = state.tr
-    .delete(start, end)
-    .insert(start, schema.text(captured, [em]));
-  // Put em in storedMarks so the cursor is visually "inside the mark" —
-  // this is what the decoration layer uses to render the gray delimiters.
-  tr.setStoredMarks([em]);
-  return tr;
-});
-
 export function markdownInputRules(): Plugin {
-  return inputRules({ rules: [emRule] });
+  return inputRules({ rules: collectInputRules(schema) });
 }
 
 // Space breaks out of storedMarks — matches Typora's UX: right after a mark
