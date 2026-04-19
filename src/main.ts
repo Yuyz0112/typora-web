@@ -78,6 +78,22 @@ root.innerHTML = `
       <summary>serialize() (md)</summary>
       <pre id="md-dump"></pre>
     </details>
+
+    <hr class="section-divider" />
+    <div class="controls">
+      <strong>Free editor</strong>
+      <button id="free-clear">Clear</button>
+      <span class="hint">type anything; pretty / md update live</span>
+    </div>
+    <div class="pane pane-editor" id="free-editor"></div>
+    <details class="dump" open>
+      <summary>pretty() snapshot</summary>
+      <pre id="free-pretty-dump"></pre>
+    </details>
+    <details class="dump" open>
+      <summary>serialize() (md)</summary>
+      <pre id="free-md-dump"></pre>
+    </details>
   </div>
 `;
 
@@ -184,3 +200,42 @@ $speed.addEventListener("input", () => {
 
 // Initial mount
 mountFromScript(currentScript);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Free editor — no script, direct keyboard input; useful for comparing
+// real-typing behaviour against scripted replay.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const $freeEditor = document.getElementById("free-editor") as HTMLDivElement;
+const $freePretty = document.getElementById("free-pretty-dump") as HTMLElement;
+const $freeMd = document.getElementById("free-md-dump") as HTMLElement;
+const $freeClear = document.getElementById("free-clear") as HTMLButtonElement;
+
+function mountFreeEditor(): EditorView {
+  const doc = schema.nodes.doc.createAndFill()!;
+  const state = EditorState.create({
+    schema,
+    doc,
+    plugins: defaultPlugins({ cursorWidget: false }),
+  });
+  const v = new EditorView($freeEditor, {
+    state,
+    dispatchTransaction(tr) {
+      const next = v.state.apply(tr);
+      v.updateState(next);
+      $freePretty.textContent = pretty(next);
+      $freeMd.textContent = serialize(next.doc);
+    },
+  });
+  $freePretty.textContent = pretty(state);
+  $freeMd.textContent = serialize(state.doc);
+  return v;
+}
+
+let freeView = mountFreeEditor();
+
+$freeClear.addEventListener("click", () => {
+  freeView.destroy();
+  $freeEditor.innerHTML = "";
+  freeView = mountFreeEditor();
+});
