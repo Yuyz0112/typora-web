@@ -76,6 +76,20 @@ html, body { margin: 0; padding: 0; font: 16px/1.6 -apple-system, system-ui, san
 }
 .ProseMirror-focused .selection-marker { display: none; }
 
+/* Heading draft: content is bold; font-size stays at paragraph size.
+ * `.heading-draft-N` is applied to the <p> via Decoration.node while the
+ * cursor is inside a matching paragraph. The `# ` prefix itself wears
+ * `.syntax-hint` which already forces font-weight: normal, so only the
+ * real content ends up bold. */
+.ProseMirror .heading-draft-1,
+.ProseMirror .heading-draft-2,
+.ProseMirror .heading-draft-3,
+.ProseMirror .heading-draft-4,
+.ProseMirror .heading-draft-5,
+.ProseMirror .heading-draft-6 {
+  font-weight: bold;
+}
+
 .dump {
   background: #fff; border: 1px solid #e3e3e3; border-radius: 8px; padding: 8px 12px;
   font-size: 13px;

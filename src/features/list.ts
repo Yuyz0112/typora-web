@@ -94,7 +94,8 @@ export const list: FeatureSpec = {
       // splitListItem returns false on an empty item so next command can lift.
       Enter: chainCommands(splitListItem(li), liftListItem(li)),
       Tab: sinkListItem(li),
-      "Shift-Tab": liftListItem(li),
+      // Typora doesn't bind Shift-Tab to un-nest; lifting is only via
+      // Enter-on-empty. Not wired here.
     };
   },
 
@@ -223,35 +224,5 @@ export const list: FeatureSpec = {
       ],
     },
 
-    // ── 8. Shift-Tab lifts a nested item back out ───────────────────────
-    {
-      id: "shift-tab-lifts",
-      label: "Shift-Tab on a nested item lifts it back to the outer level",
-      // seed shape: two top-level items, second sunk under first, cursor
-      // at end of nested `b`.
-      seed: "- a\n  - b",
-      events: ["<End>", "<Shift-Tab>"],
-      checkpoints: [
-        { at: 1, expect: "- a\n  - b|" },
-        // [VERIFY] liftListItem promotes `b` back to the outer list, making
-        //   it a sibling of `a`.
-        { at: 2, expect: "- a\n- b|" },
-      ],
-    },
-
-    // ── 9. Tab round-trip (sink then lift returns to original) ──────────
-    {
-      id: "tab-roundtrip",
-      label: "Tab then Shift-Tab restores the flat structure",
-      seed: "- a\n- b",
-      events: ["<End>", "<Tab>", "<Shift-Tab>"],
-      checkpoints: [
-        { at: 1, expect: "- a\n- b|" },
-        // [VERIFY] second item becomes nested under first.
-        { at: 2, expect: "- a\n  - b|" },
-        // [VERIFY] lifted back out.
-        { at: 3, expect: "- a\n- b|" },
-      ],
-    },
   ],
 };

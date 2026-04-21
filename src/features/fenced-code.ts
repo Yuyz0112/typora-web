@@ -122,6 +122,30 @@ export const fencedCode: FeatureSpec = {
       }
       return true;
     },
+
+    // Empty code_block + Backspace → delete the entire code_block (not
+    // just clear one char). Typora: once main content is empty, a single
+    // Backspace removes the block.
+    Backspace: (state, dispatch) => {
+      const sel = state.selection;
+      if (!sel.empty) return false;
+      const $from = sel.$from;
+      if ($from.parent.type.name !== "code_block") return false;
+      if ($from.parent.content.size > 0) return false;
+      if (dispatch) {
+        const pos = $from.before();
+        const size = $from.parent.nodeSize;
+        const tr = state.tr.delete(pos, pos + size);
+        // If the doc became empty, re-insert a paragraph so the caret
+        // has somewhere to land (schema requires at least one block).
+        if (tr.doc.content.size === 0) {
+          const p = schema.nodes.paragraph.createAndFill();
+          if (p) tr.insert(0, p);
+        }
+        dispatch(tr);
+      }
+      return true;
+    },
   }),
 
   cases: [

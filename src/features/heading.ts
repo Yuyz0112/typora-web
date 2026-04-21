@@ -164,29 +164,17 @@ export const heading: FeatureSpec = {
     {
       id: "arrow-leave-commits",
       label: "ArrowDown from draft commits to heading just like Enter",
+      // Relies on the core `lastLineArrowDownPlugin` in editor.ts — at the
+      // doc's absolute end, ArrowDown spawns a fresh paragraph below and
+      // moves the cursor into it. leaveLineDraft sees the cursor leave
+      // the matching paragraph and fires commit.
       seed: "",
-      // Need a following paragraph to ArrowDown into — type `# a`, Enter to
-      // commit & create a trailing paragraph, go back up into the heading
-      // (rendered, not draft), ArrowDown again… that's not a draft→commit
-      // trigger. Instead: seed a trailing empty block by splitting first,
-      // then type the draft above it? block-draft only commits on cursor
-      // leaving a draft paragraph. Build it: type `# a` to get draft,
-      // then ArrowDown into the synthesised nothing. With only one block
-      // the doc is `paragraph("# a")` — ArrowDown has no target, cursor
-      // stays. So we need a pre-existing second paragraph.
-      //
-      // Seed approach: start with two paragraphs via `\n\n` markdown
-      // (which parses to two empty paragraphs? actually commonmark
-      // collapses empty paragraphs). Easier: seed "\n\nafter", then
-      // navigate up and type `# a` into first.
       events: ["#", " ", "a", "<ArrowDown>"],
       checkpoints: [
         { at: 3, expect: "<g># </g>a|" },
-        // Without a trailing block, ArrowDown is a no-op in the test
-        // fallback — cursor stays, no commit. This case stays de-facto
-        // skipped by having the terminal checkpoint reflect the
-        // ArrowDown no-op (cursor stays in draft).
-        { at: 4, expect: "<g># </g>a|" },
+        // Committed heading + cursor in the newly-spawned empty
+        // paragraph below — same shape as the Enter-commit path.
+        { at: 4, expect: "<h1>a</h1>\n|" },
       ],
     },
 
