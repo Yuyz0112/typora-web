@@ -85,3 +85,19 @@ html, body { margin: 0; padding: 0; font: 16px/1.6 -apple-system, system-ui, san
 
 .section-divider { border: none; border-top: 1px dashed #d0d0d0; margin: 24px 0 16px; }
 .hint { color: #888; font-size: 12px; }
+
+/* ── Flat case list (scripted presets) ─────────────────────────────── */
+.script-list-header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 8px; }
+.script-list {
+  display: flex; flex-direction: column; gap: 2px;
+  border: 1px solid #e3e3e3; border-radius: 8px; padding: 6px;
+  background: #fff;
+}
+.script-item {
+  text-align: left; padding: 6px 10px; border: none; border-radius: 4px;
+  background: transparent; cursor: pointer;
+  font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #444;
+}
+.script-item:hover { background: #f0f0f5; }
+.script-item.active { background: #e8ecff; color: #1a1a80; font-weight: 600; }

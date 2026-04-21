@@ -54,9 +54,6 @@ const root = document.querySelector<HTMLDivElement>("#app")!;
 root.innerHTML = `
   <div class="harness">
     <div class="controls">
-      <label>preset
-        <select id="script"></select>
-      </label>
       <button id="reset">Reset</button>
       <button id="step">Step ▸</button>
       <button id="play">Play ▶</button>
@@ -94,10 +91,17 @@ root.innerHTML = `
       <summary>serialize() (md)</summary>
       <pre id="free-md-dump"></pre>
     </details>
+
+    <hr class="section-divider" />
+    <div class="script-list-header">
+      <strong>Cases</strong>
+      <span class="hint">click to load; all scripts + core presets laid out flat</span>
+    </div>
+    <div class="script-list" id="script-list"></div>
   </div>
 `;
 
-const $script = document.getElementById("script") as HTMLSelectElement;
+const $scriptList = document.getElementById("script-list") as HTMLDivElement;
 const $reset = document.getElementById("reset") as HTMLButtonElement;
 const $step = document.getElementById("step") as HTMLButtonElement;
 const $play = document.getElementById("play") as HTMLButtonElement;
@@ -109,11 +113,27 @@ const $editor = document.getElementById("editor") as HTMLDivElement;
 const $prettyDump = document.getElementById("pretty-dump") as HTMLElement;
 const $mdDump = document.getElementById("md-dump") as HTMLElement;
 
+// Flat list of every case, stacked top-to-bottom. Click to load into the
+// scripted editor above. The currently-active row gets `.active`.
+const scriptButtons = new Map<string, HTMLButtonElement>();
 for (const s of SCRIPTS) {
-  const opt = document.createElement("option");
-  opt.value = s.id;
-  opt.textContent = s.label;
-  $script.append(opt);
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "script-item";
+  btn.dataset.id = s.id;
+  btn.textContent = s.label;
+  btn.addEventListener("click", () => selectScript(s.id));
+  $scriptList.append(btn);
+  scriptButtons.set(s.id, btn);
+}
+
+function selectScript(id: string): void {
+  setPlaying(false);
+  currentScript = SCRIPTS.find((s) => s.id === id) ?? SCRIPTS[0]!;
+  for (const [btnId, btn] of scriptButtons) {
+    btn.classList.toggle("active", btnId === currentScript.id);
+  }
+  mountFromScript(currentScript);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -174,11 +194,6 @@ function setPlaying(on: boolean): void {
 // Control wiring
 // ─────────────────────────────────────────────────────────────────────────────
 
-$script.addEventListener("change", () => {
-  setPlaying(false);
-  currentScript = SCRIPTS.find((s) => s.id === $script.value) ?? SCRIPTS[0]!;
-  mountFromScript(currentScript);
-});
 $reset.addEventListener("click", () => {
   setPlaying(false);
   mountFromScript(currentScript);
@@ -198,8 +213,8 @@ $speed.addEventListener("input", () => {
   }
 });
 
-// Initial mount
-mountFromScript(currentScript);
+// Initial mount — also marks the first row active.
+selectScript(currentScript.id);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Free editor — no script, direct keyboard input; useful for comparing
