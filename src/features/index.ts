@@ -1,6 +1,7 @@
 // Single registry of all Typora-syntax features. Each core module reads
 // exactly from here — adding a feature means one import + one array entry.
 
+import { chainCommands } from "prosemirror-commands";
 import type { Command, Plugin } from "prosemirror-state";
 import type { Schema } from "prosemirror-model";
 
@@ -61,10 +62,27 @@ export function collectInputRules(
 export function collectBlockHandlers(): NonNullable<FeatureSpec["blockHandlers"]> {
   return Object.assign({}, ...ALL_FEATURES.map((f) => f.blockHandlers ?? {}));
 }
-// Merge each feature's keymap contribution; last writer wins on collision.
+// When multiple features bind the SAME key (e.g. fenced-code and list both
+// claim Enter), we chain their commands in ALL_FEATURES order: each command
+// gets to run its guard → action, and returning `false` falls through to the
+// next. Without the chain, Object.assign would silently drop all but the
+// last binding and whichever feature was registered last would win.
 // Core baseKeymap is applied separately (and after) in editor.ts.
 export function collectKeymaps(schema: Schema): Record<string, Command> {
-  return Object.assign({}, ...ALL_FEATURES.map((f) => f.keymap?.(schema) ?? {}));
+  const byKey = new Map<string, Command[]>();
+  for (const f of ALL_FEATURES) {
+    const km = f.keymap?.(schema);
+    if (!km) continue;
+    for (const [key, cmd] of Object.entries(km)) {
+      const arr = byKey.get(key) ?? [];
+      arr.push(cmd);
+      byKey.set(key, arr);
+    }
+  }
+  const out: Record<string, Command> = {};
+  for (const [key, cmds] of byKey)
+    out[key] = cmds.length === 1 ? cmds[0]! : chainCommands(...cmds);
+  return out;
 }
 export function collectPlugins(schema: Schema): Plugin[] {
   return ALL_FEATURES.flatMap((f) => f.plugins?.(schema) ?? []);

@@ -207,14 +207,18 @@ export const list: FeatureSpec = {
       checkpoints: [
         // [VERIFY] <End> defensive — assume seed-parse puts cursor near b.
         { at: 1, expect: "- a\n  - b|" },
-        // [VERIFY] new empty nested sibling.
+        // Enter 1: new empty nested sibling at the inner level.
         { at: 2, expect: "- a\n  - b\n  - |" },
-        // PM's splitListItem on a nested empty inner item takes the
-        // "split the wrapping list item" branch — it promotes the empty
-        // item directly to a sibling of the outer item (same as one lift).
-        // No bulletless <li-tail> intermediate under this command chain.
+        // Enter 2: PM's chain(splitListItem, liftListItem) on an empty
+        // inner item skips the bulletless intermediate and lifts the
+        // empty item *directly* into an outer-sibling li. Typora's UX
+        // shows an extra "no-bullet, b-level indent" step in between —
+        // reproducing that needs a custom command (TODO, not in this
+        // round). The <li-tail> pretty affordance is still live in
+        // test-pretty for when that lands.
         { at: 3, expect: "- a\n  - b\n- |" },
-        // Third Enter: empty top-level item → lift → exit list to paragraph.
+        // Enter 3: the now-empty top-level item is lifted out of the
+        // list entirely → plain paragraph.
         { at: 4, expect: "- a\n  - b\n|" },
       ],
     },
