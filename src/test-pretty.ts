@@ -103,13 +103,21 @@ function renderNode(n: Node): string {
         .join("\n");
     }
     case "li": {
-      // Join block children with `\n` so that a multi-block li (e.g. list's
-      // staircase-exit intermediate state where an outer li contains a
-      // paragraph + nested ul + trailing paragraph) renders with one line
-      // per block. The parent ul/ol then indents continuation lines by the
-      // prefix width — so the trailing bulletless paragraph shows up as
-      // `  |` (indented, no bullet), distinct from a top-level paragraph.
-      return Array.from(el.children).map(renderNode).join("\n");
+      // First block child carries the bullet (parent ul/ol prepends `- `).
+      // Non-first <p> children are "bulletless trailing paragraphs" — the
+      // staircase-exit intermediate state (outer li with nested ul + a
+      // trailing p) and CommonMark loose list continuations both look like
+      // this. Wrap those in <li-tail> so pretty stays unambiguous even
+      // before the reader sees the surrounding indentation.
+      return Array.from(el.children)
+        .map((child, i) => {
+          const content = renderNode(child);
+          if (i === 0) return content;
+          return child.tagName.toLowerCase() === "p"
+            ? `<li-tail>${content}</li-tail>`
+            : content; // nested ul/ol keep their own prefix handling
+        })
+        .join("\n");
     }
     default:
       return children;
