@@ -5,12 +5,31 @@ import type { Command, Plugin } from "prosemirror-state";
 import type { Schema } from "prosemirror-model";
 
 import type { Case, FeatureSpec, InlineFeatureSpec } from "./_types.ts";
+import { blockquote } from "./blockquote.ts";
 import { code } from "./code.ts";
 import { emphasis } from "./emphasis.ts";
+import { fencedCode } from "./fenced-code.ts";
+import { heading } from "./heading.ts";
+import { hr } from "./hr.ts";
 import { link } from "./link.ts";
+import { list } from "./list.ts";
 import { strike } from "./strike.ts";
 
-export const ALL_FEATURES: FeatureSpec[] = [emphasis, code, strike, link];
+// heading / list / fencedCode are cases-only stubs for now — registered
+// here so their scripts surface in the harness (collectCases), even
+// though the feature plugins haven't landed yet. Their tests stay red
+// until implementation. hr and blockquote are fully implemented.
+export const ALL_FEATURES: FeatureSpec[] = [
+  emphasis,
+  code,
+  strike,
+  link,
+  hr,
+  blockquote,
+  heading,
+  list,
+  fencedCode,
+];
 
 // Thin helpers that collect a named table from every feature. They are
 // the only place the core modules touch the registry, so each seam stays
