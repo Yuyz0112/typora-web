@@ -1,4 +1,5 @@
 import type { Schema } from "prosemirror-model";
+import { Plugin, Selection, TextSelection } from "prosemirror-state";
 
 import { leaveLineDraft } from "../block-draft.ts";
 import type { FeatureSpec } from "./_types.ts";
@@ -22,6 +23,42 @@ import type { FeatureSpec } from "./_types.ts";
 // block; we want the "unwrap in place" semantics Typora uses.
 
 const HEADING_RE = /^(#{1,6}) (.+)$/;
+
+// Typora-specific UX: ArrowDown inside a HEADING DRAFT line, at the very
+// end of the doc, spawns a fresh empty paragraph below and moves the
+// cursor into it. This gives the draft a place to leave to, which makes
+// leaveLineDraft fire its commit. Scoped to heading drafts only — regular
+// paragraphs at end-of-doc do NOT auto-extend (that was a broader plugin
+// I pulled out of core once I learned it was heading-specific behavior).
+function headingArrowDownPlugin(): Plugin {
+  return new Plugin({
+    props: {
+      handleKeyDown(view, e) {
+        if (e.key !== "ArrowDown") return false;
+        if (e.shiftKey || e.metaKey || e.ctrlKey || e.altKey) return false;
+        const { state } = view;
+        const sel = state.selection;
+        if (!sel.empty) return false;
+        const para = sel.$from.parent;
+        if (para.type.name !== "paragraph") return false;
+        if (!HEADING_RE.test(para.textContent)) return false;
+        // Only at doc's absolute end — ArrowDown inside a heading draft
+        // that has a following block should just move into that block.
+        const end = Selection.atEnd(state.doc);
+        if (sel.from !== end.from) return false;
+        const paraType = state.schema.nodes.paragraph;
+        if (!paraType) return false;
+        const newPara = paraType.createAndFill();
+        if (!newPara) return false;
+        const insertPos = state.doc.content.size;
+        const tr = state.tr.insert(insertPos, newPara);
+        tr.setSelection(TextSelection.create(tr.doc, insertPos + 1));
+        view.dispatch(tr);
+        return true;
+      },
+    },
+  });
+}
 
 function makeHeadingPlugin(schema: Schema) {
   return leaveLineDraft<{ level: number }>({
@@ -54,7 +91,7 @@ function makeHeadingPlugin(schema: Schema) {
 export const heading: FeatureSpec = {
   name: "heading",
 
-  plugins: (schema) => [makeHeadingPlugin(schema).plugin],
+  plugins: (schema) => [makeHeadingPlugin(schema).plugin, headingArrowDownPlugin()],
 
   keymap: (schema) => ({
     // Empty heading + Backspace at start → unwrap to paragraph.
@@ -163,17 +200,16 @@ export const heading: FeatureSpec = {
 
     {
       id: "arrow-leave-commits",
-      label: "ArrowDown from draft commits to heading just like Enter",
-      // Relies on the core `lastLineArrowDownPlugin` in editor.ts — at the
-      // doc's absolute end, ArrowDown spawns a fresh paragraph below and
-      // moves the cursor into it. leaveLineDraft sees the cursor leave
-      // the matching paragraph and fires commit.
+      label: "ArrowDown from draft commits to heading (heading-scoped plugin)",
+      // headingArrowDownPlugin fires only inside a heading-draft paragraph
+      // at the doc's absolute end: spawns a fresh trailing paragraph, moves
+      // the cursor into it, and leaveLineDraft then runs its commit. This
+      // is NOT a global "last-line ArrowDown" behavior — a plain paragraph
+      // at doc end does nothing.
       seed: "",
       events: ["#", " ", "a", "<ArrowDown>"],
       checkpoints: [
         { at: 3, expect: "<g># </g>a|" },
-        // Committed heading + cursor in the newly-spawned empty
-        // paragraph below — same shape as the Enter-commit path.
         { at: 4, expect: "<h1>a</h1>\n|" },
       ],
     },
