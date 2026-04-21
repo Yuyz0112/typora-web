@@ -1,6 +1,10 @@
 import type { Mark, Node as PMNode } from "prosemirror-model";
 
-import { collectInlineFeatures, collectMarkDelims } from "./features/index.ts";
+import {
+  collectBlockHandlers,
+  collectInlineFeatures,
+  collectMarkDelims,
+} from "./features/index.ts";
 import { schema } from "./schema.ts";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -246,9 +250,9 @@ class SerializerState {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-type BlockHandler = (state: SerializerState, node: PMNode) => void;
+export type BlockHandler = (state: SerializerState, node: PMNode) => void;
 
-const blockHandlers: Record<string, BlockHandler> = {
+const coreBlockHandlers: Record<string, BlockHandler> = {
   paragraph: (state, node) => {
     state.renderInline(node);
     state.closeBlock(node);
@@ -315,6 +319,13 @@ const blockHandlers: Record<string, BlockHandler> = {
   list_item: (state, node) => {
     state.renderBlockChildren(node);
   },
+};
+
+// Feature-contributed block handlers win over core when names collide (lets
+// a feature migrate a core node type wholesale, not yet exercised).
+const blockHandlers: Record<string, BlockHandler> = {
+  ...coreBlockHandlers,
+  ...collectBlockHandlers(),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

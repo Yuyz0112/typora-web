@@ -19,11 +19,15 @@ import type {
   Node as PMNode,
   Schema,
 } from "prosemirror-model";
+import type { Command, Plugin } from "prosemirror-state";
 
 import type { Event } from "../events.ts";
 import type { InlineSpan } from "../inline-parse.ts";
 import type { ParserState } from "../parser.ts";
-import type { MarkSpec as SerializerMarkSpec } from "../serializer.ts";
+import type {
+  BlockHandler,
+  MarkSpec as SerializerMarkSpec,
+} from "../serializer.ts";
 
 // A Case is one scripted scenario — seed text plus an event stream — with
 // one or more Checkpoints along the way that assert pretty() output. One
@@ -62,7 +66,20 @@ export type FeatureSpec = {
   mdItPlugins?: Array<(md: MarkdownIt) => void>;
   parserTokens?: Record<string, TokenHandler>;
   markDelims?: Record<string, SerializerMarkSpec>;
+  // Block-level serializer handlers — one entry per node type the feature
+  // contributes (or overrides). The core serializer has a fixed table for
+  // paragraph / heading / blockquote / lists / code_block / horizontal_rule;
+  // features can add new node types here, or (in principle) override a core
+  // entry when migrating.
+  blockHandlers?: Record<string, BlockHandler>;
   inputRules?: (schema: Schema) => InputRule[];
+  // Block-level interactions (Enter to exit an empty blockquote, Backspace
+  // to unwrap a heading, etc.). Merged before baseKeymap so features win.
+  keymap?: (schema: Schema) => Record<string, Command>;
+  // Escape hatch for feature-owned PM plugins: leave-line draft watchers,
+  // NodeViews (via Plugin.props.nodeViews), DOM event handlers for custom
+  // UI overlays. Anything that doesn't fit inputRules / keymap / normalize.
+  plugins?: (schema: Schema) => Plugin[];
   renderCases?: Record<string, RenderCase>;
   cases?: Case[];
   inline?: InlineFeatureSpec;

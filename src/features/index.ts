@@ -1,6 +1,9 @@
 // Single registry of all Typora-syntax features. Each core module reads
 // exactly from here — adding a feature means one import + one array entry.
 
+import type { Command, Plugin } from "prosemirror-state";
+import type { Schema } from "prosemirror-model";
+
 import type { Case, FeatureSpec, InlineFeatureSpec } from "./_types.ts";
 import { code } from "./code.ts";
 import { emphasis } from "./emphasis.ts";
@@ -35,6 +38,17 @@ export function collectInputRules(
   schema: Parameters<NonNullable<FeatureSpec["inputRules"]>>[0],
 ) {
   return ALL_FEATURES.flatMap((f) => f.inputRules?.(schema) ?? []);
+}
+export function collectBlockHandlers(): NonNullable<FeatureSpec["blockHandlers"]> {
+  return Object.assign({}, ...ALL_FEATURES.map((f) => f.blockHandlers ?? {}));
+}
+// Merge each feature's keymap contribution; last writer wins on collision.
+// Core baseKeymap is applied separately (and after) in editor.ts.
+export function collectKeymaps(schema: Schema): Record<string, Command> {
+  return Object.assign({}, ...ALL_FEATURES.map((f) => f.keymap?.(schema) ?? {}));
+}
+export function collectPlugins(schema: Schema): Plugin[] {
+  return ALL_FEATURES.flatMap((f) => f.plugins?.(schema) ?? []);
 }
 // Cases get namespaced by feature so ids stay unique across the app.
 export function collectCases(): Array<Case & { feature: string }> {
