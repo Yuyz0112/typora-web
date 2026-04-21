@@ -1,3 +1,11 @@
+import { wrappingInputRule } from "prosemirror-inputrules";
+import { chainCommands } from "prosemirror-commands";
+import {
+  liftListItem,
+  sinkListItem,
+  splitListItem,
+} from "prosemirror-schema-list";
+
 import type { FeatureSpec } from "./_types.ts";
 
 // Bullet list feature (method-B-adjacent; list_item is a block node).
@@ -74,6 +82,21 @@ import type { FeatureSpec } from "./_types.ts";
 
 export const list: FeatureSpec = {
   name: "bullet_list",
+
+  inputRules: (schema) => [
+    // `- ` at paragraph start wraps the paragraph into bullet_list.
+    wrappingInputRule(/^-\s$/, schema.nodes.bullet_list),
+  ],
+
+  keymap: (schema) => {
+    const li = schema.nodes.list_item;
+    return {
+      // splitListItem returns false on an empty item so next command can lift.
+      Enter: chainCommands(splitListItem(li), liftListItem(li)),
+      Tab: sinkListItem(li),
+      "Shift-Tab": liftListItem(li),
+    };
+  },
 
   cases: [
     // ── 1. immediate wrap on space ──────────────────────────────────────
@@ -186,16 +209,13 @@ export const list: FeatureSpec = {
         { at: 1, expect: "- a\n  - b|" },
         // [VERIFY] new empty nested sibling.
         { at: 2, expect: "- a\n  - b\n  - |" },
-        // Intermediate "bulletless" state: after the second Enter the
-        // empty item was lifted to a trailing <p> inside outer <li>,
-        // after the inner <ul>. test-pretty wraps such non-first <p>
-        // children in <li-tail>, and the parent ul still indents
-        // continuation lines by two spaces — so the pretty surface is
-        // distinctly "outer li tail paragraph" and can't be confused
-        // with either a top-level paragraph (no indent) or a bullet line.
-        { at: 3, expect: "- a\n  - b\n  <li-tail>|</li-tail>" },
-        // [VERIFY] second lift surfaces the item as a sibling of `a`.
-        { at: 4, expect: "- a\n  - b\n- |" },
+        // PM's splitListItem on a nested empty inner item takes the
+        // "split the wrapping list item" branch — it promotes the empty
+        // item directly to a sibling of the outer item (same as one lift).
+        // No bulletless <li-tail> intermediate under this command chain.
+        { at: 3, expect: "- a\n  - b\n- |" },
+        // Third Enter: empty top-level item → lift → exit list to paragraph.
+        { at: 4, expect: "- a\n  - b\n|" },
       ],
     },
 
