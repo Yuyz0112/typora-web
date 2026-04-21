@@ -71,10 +71,11 @@ function renderNode(n: Node): string {
     case "hr":
       return "---";
     case "blockquote":
-      return children
-        .split("\n")
-        .map((line) => `> ${line}`)
-        .join("\n");
+      // Same ambiguity fix as headings: a paragraph whose text starts
+      // with `> ` would pretty-render identically to an actual
+      // blockquote under the old `> ${line}` form. Wrap with <bq> and
+      // join multi-block children by newline.
+      return `<bq>${Array.from(el.children).map(renderNode).join("\n")}</bq>`;
     case "pre": {
       // <pre data-lang="ts"><code>text</code></pre>. Recurse through the
       // `<code>` child instead of reading textContent — textContent skips
