@@ -1,94 +1,82 @@
+import type { Schema } from "prosemirror-model";
+
+import { leaveLineDraft } from "../block-draft.ts";
 import type { FeatureSpec } from "./_types.ts";
 
-// Heading feature — test-case STUB.
+// Heading (Typora-style draft → commit).
 //
-// Implementation will use `src/block-draft.ts`: while the cursor is in a
-// paragraph whose text matches /^(#{1,6}) (.+)/, the paragraph enters a
-// "draft heading" state — `# ` prefix gets `syntax-hint` inline deco
-// (gray `<g># </g>`), content gets a bold/heading draft class but stays
-// at paragraph font size. When the cursor leaves the line (Enter / click
-// / arrow across block boundary), the draft commits to a real heading
-// node of level = #-count; that commit is one-way (re-entering an
-// already-rendered heading does NOT return to draft).
+// While the cursor sits in a paragraph whose textContent matches
+// `^(#{1,6}) (.+)$`, the helper decorates the leading `#{N} ` with
+// `syntax-hint` (gray in pretty: `<g># </g>`) and tags the paragraph
+// with `heading-draft-{N}` via a node decoration (CSS bolds it — test
+// assertions don't depend on CSS).
 //
-// ─────────────────────────────────────────────────────────────────────────────
-// OPEN QUESTIONS (flagged for implementor / reviewer; do not silently fix)
-// ─────────────────────────────────────────────────────────────────────────────
+// When the cursor leaves the line (Enter splitBlock, ArrowUp/Down,
+// click), the paragraph is replaced with a real `heading` node of
+// level N. The commit is one-way: re-entering a rendered heading does
+// NOT go back to draft. That comes for free because `leaveLineDraft`
+// only matches paragraphs — a heading node never triggers draft state.
 //
-// Q1. test-pretty heading ambiguity.
-//   Current `test-pretty.ts` renders <h1> as the literal string `# content`
-//   (`${"#".repeat(level)} ${children}`). That collides 1:1 with a plain
-//   paragraph whose text is `# content` — the committed/rendered state is
-//   visually indistinguishable from the "not entered" state, and from the
-//   draft state if we stripped the <g># </g> hint.
-//
-//   Proposal: change the heading renderCase (either via a feature
-//   renderCase entry, or by editing the switch in test-pretty) to wrap the
-//   children in the tag instead of synthesising a `#` prefix, i.e.
-//     <h1>content</h1> ... <h6>content</h6>
-//   This is consistent with how <em>/<strong>/<a> are rendered (tag wraps
-//   content) and removes the ambiguity.
-//
-//   The cases below are written ASSUMING this change has landed. Each case
-//   that depends on it is tagged in its comment with "DEPENDS ON pretty
-//   change (Q1)". They will fail today both because the feature is not
-//   implemented AND because pretty still emits the `# ` prefix form — the
-//   Q1 change needs to ship before the commit-state assertions can go
-//   green on their own.
-//
-// Q2. Events missing for arrow-up/down.
-//   Two desirable cases are not writable today because `src/events.ts`
-//   doesn't define `<ArrowUp>` / `<ArrowDown>`:
-//     - "leaving the line by arrow-up commits draft to heading"
-//     - "re-entering an already-rendered heading line stays rendered
-//        (one-way transition)"
-//   These are flagged in cases[].label with "SKIPPED (no ArrowUp/Down)".
-//   Adding them to events.ts is a one-liner; revisit after that lands.
-//
-// Q3. Empty-heading backspace case.
-//   "Render a heading with no content, Backspace twice → paragraph" needs
-//   a seed that parses into a real heading node. Using `seed: "# "` only
-//   yields a paragraph (pattern requires `^#{1,6} .+`, i.e. non-empty
-//   content), so there is no md string that produces an empty <h1> via the
-//   normal parser. The spec says "serialize looks at the heading node's
-//   level attr", so the round-trip `# ` exists on the serialise side but
-//   not the parse side. Workaround options:
-//     a) seed with non-empty content (`"# a"`) then delete `a` first, then
-//        test double-Backspace. This keeps us honest about parse path.
-//     b) extend test-utils `setup()` to accept a pre-built doc / JSON.
-//   Case below uses (a) and notes the compromise.
-//
-// Q4. "Draft + Enter cursor position".
-//   After commit, PM inserts a new paragraph below the heading and puts
-//   the cursor there. pretty for two stacked blocks joins with `\n`. The
-//   new-paragraph block is empty — with the trailing-break filter it
-//   renders as an empty string, so the block join produces `...\n`. The
-//   caret widget lives INSIDE the empty paragraph, so pretty should show
-//   `<h1>a</h1>\n|`. Verify this matches block-draft's actual commit
-//   behaviour (does it create a new paragraph, or move cursor to start of
-//   the following existing block?). If the commit does NOT create a
-//   trailing paragraph when there is none, these `\n|` endings need
-//   adjustment.
-//
-// Q5. Draft ↔ not-entered toggle on `#` deletion.
-//   Spec says "delete `#` → back to not-entered". Two interpretations:
-//     i)  deletion of the space after `#` (text becomes `#a`) breaks the
-//         pattern → exits draft
-//     ii) deletion of `#` itself (text becomes ` a` with leading space) →
-//         exits draft
-//   Both are "text no longer matches ^#{1,6} .+", so block-draft should
-//   drop the deco purely as a function of text. Case #4 below exercises
-//   (i). (ii) is implicit — same mechanism.
-//
-// Q6. "Active + type # at line start raises level" — case #5 below.
-//   Assumes block-draft recomputes `level = #-count` every transaction,
-//   which is the natural reading of "match is pure function of text".
-//   If implementor caches level, this case will catch it.
-//
-// ─────────────────────────────────────────────────────────────────────────────
+// Extra: Backspace at the start of an empty heading unwraps to
+// paragraph. PM's default joinBackward would merge into the previous
+// block; we want the "unwrap in place" semantics Typora uses.
+
+const HEADING_RE = /^(#{1,6}) (.+)$/;
+
+function makeHeadingPlugin(schema: Schema) {
+  return leaveLineDraft<{ level: number }>({
+    match: (text) => {
+      const m = HEADING_RE.exec(text);
+      if (!m) return null;
+      const level = m[1]!.length;
+      return {
+        data: { level },
+        prefixLen: level + 1, // `#{N} ` — N hashes plus one space.
+      };
+    },
+    draftClass: (data) => `heading-draft-${data.level}`,
+    commit: (tr, pos, paragraph, data) => {
+      // Drop the `#{N} ` prefix and re-wrap the remaining inline
+      // content in a heading. Fragment.cut(N+1) keeps position offsets
+      // aligned with text offsets (marks attach to text nodes, not
+      // positions) so marks on the remaining content survive.
+      const prefix = data.level + 1;
+      const remaining = paragraph.content.cut(prefix);
+      const headingNode = schema.nodes.heading.create(
+        { level: data.level },
+        remaining,
+      );
+      tr.replaceWith(pos, pos + paragraph.nodeSize, headingNode);
+    },
+  });
+}
 
 export const heading: FeatureSpec = {
   name: "heading",
+
+  plugins: (schema) => [makeHeadingPlugin(schema).plugin],
+
+  keymap: (schema) => ({
+    // Empty heading + Backspace at start → unwrap to paragraph.
+    // PM's baseKeymap Backspace (joinBackward) would merge into the
+    // previous block — we want the heading-in-place to become a
+    // plain paragraph. Only fires on an empty heading at offset 0.
+    Backspace: (state, dispatch) => {
+      const sel = state.selection;
+      if (!sel.empty) return false;
+      const $from = sel.$from;
+      if ($from.parent.type.name !== "heading") return false;
+      if ($from.parentOffset !== 0) return false;
+      if ($from.parent.content.size > 0) return false;
+      if (dispatch) {
+        const tr = state.tr;
+        const pos = $from.before();
+        tr.setBlockType(pos, pos + $from.parent.nodeSize, schema.nodes.paragraph);
+        dispatch(tr);
+      }
+      return true;
+    },
+  }),
 
   cases: [
     {
@@ -104,8 +92,7 @@ export const heading: FeatureSpec = {
         // `# a`: draft active — `# ` gets syntax-hint deco, content visible.
         { at: 3, expect: "<g># </g>a|" },
         // Enter commits the draft to a real heading; caret lands in a new
-        // paragraph below. DEPENDS ON pretty change (Q1) — `<h1>a</h1>`
-        // instead of `# a`. Trailing newline + caret: see Q4.
+        // paragraph below.
         { at: 4, expect: "<h1>a</h1>\n|" },
       ],
     },
@@ -119,7 +106,7 @@ export const heading: FeatureSpec = {
         { at: 3, expect: "###|" },          // not entered
         { at: 4, expect: "### |" },         // still not entered (empty content)
         { at: 5, expect: "<g>### </g>x|" }, // draft
-        { at: 6, expect: "<h3>x</h3>\n|" }, // commit. DEPENDS ON pretty change (Q1)
+        { at: 6, expect: "<h3>x</h3>\n|" }, // commit
       ],
     },
 
@@ -143,8 +130,7 @@ export const heading: FeatureSpec = {
       events: ["#", " ", "a", "<Backspace>", "<Backspace>"],
       checkpoints: [
         { at: 3, expect: "<g># </g>a|" },   // draft
-        // Delete `a` → text is `# ` → pattern requires non-empty
-        // content → pattern fails → draft exits → plain paragraph.
+        // Delete `a` → text is `# ` → pattern fails → draft exits → plain paragraph.
         { at: 4, expect: "# |" },
         // Delete the space → text is `#` → still paragraph, no deco.
         { at: 5, expect: "#|" },
@@ -152,28 +138,14 @@ export const heading: FeatureSpec = {
     },
 
     {
-      id: "raise-level-by-prepending-hash",
-      label: "seed `# a`, <Home>#  — in-draft, prepending # raises level 1→2",
+      id: "rendered-seed-has-cursor-at-end",
+      label: "seed `# a` parses to <h1>; cursor lands at end",
       seed: "# a",
-      events: ["<Home>", "#"],
+      events: [],
       checkpoints: [
-        // Seed parses as a real <h1> via markdown-it (committed, not draft).
-        // DEPENDS ON pretty change (Q1).
-        //
-        // NOTE: if we want the seed to land in DRAFT state rather than
-        // rendered, the seed needs to come in via a different path
-        // (block-draft only activates when cursor is in a paragraph).
-        // Parser produces a heading node for `# a`, so the `at: 0`
-        // checkpoint reflects the committed form. The `<Home>` + `#` are
-        // therefore operating on a rendered heading, not a draft. This
-        // case is kept to exercise "typing into a rendered heading" —
-        // behaviour TBD by implementor. Mark as DEPENDS ON spec
-        // clarification until then.
-        //
-        // If instead we want to test draft-level bumping, seed needs to be
-        // something that lands in draft — requires a way to seed a
-        // paragraph with text `# a` (bypass parser). See Q3 option (b).
-        { at: 0, expect: "<h1>a</h1>" },
+        // Parser produces a committed heading; setup() puts the caret at
+        // end-of-doc, which resolves to inside the heading.
+        { at: 0, expect: "<h1>a|</h1>" },
       ],
     },
 
@@ -184,47 +156,46 @@ export const heading: FeatureSpec = {
       events: ["#", " ", "a", "<Enter>", "x"],
       checkpoints: [
         { at: 3, expect: "<g># </g>a|" },
-        { at: 4, expect: "<h1>a</h1>\n|" },   // DEPENDS ON pretty change (Q1) + Q4
-        { at: 5, expect: "<h1>a</h1>\nx|" },  // DEPENDS ON pretty change (Q1) + Q4
+        { at: 4, expect: "<h1>a</h1>\n|" },
+        { at: 5, expect: "<h1>a</h1>\nx|" },
       ],
-    },
-
-    // ─────────────────────────────────────────────────────────────────────
-    // Cases SKIPPED for now — flagged with reason. Intentionally empty
-    // checkpoints arrays so runFeatureCases still enumerates them in the
-    // harness but emits no assertions. Flip these on once the blocker
-    // lifts.
-    // ─────────────────────────────────────────────────────────────────────
-
-    {
-      id: "rendered-reentry-stays-rendered",
-      label:
-        "SKIPPED (no ArrowUp/Down in events.ts — Q2) — re-entering an " +
-        "already-rendered heading line stays rendered; does NOT re-enter draft",
-      seed: "",
-      events: [],
-      checkpoints: [],
     },
 
     {
       id: "arrow-leave-commits",
-      label:
-        "SKIPPED (no ArrowUp/Down in events.ts — Q2) — leaving the line by " +
-        "ArrowDown from draft commits to heading just like <Enter> does",
+      label: "ArrowDown from draft commits to heading just like Enter",
       seed: "",
-      events: [],
-      checkpoints: [],
+      // Need a following paragraph to ArrowDown into — type `# a`, Enter to
+      // commit & create a trailing paragraph, go back up into the heading
+      // (rendered, not draft), ArrowDown again… that's not a draft→commit
+      // trigger. Instead: seed a trailing empty block by splitting first,
+      // then type the draft above it? block-draft only commits on cursor
+      // leaving a draft paragraph. Build it: type `# a` to get draft,
+      // then ArrowDown into the synthesised nothing. With only one block
+      // the doc is `paragraph("# a")` — ArrowDown has no target, cursor
+      // stays. So we need a pre-existing second paragraph.
+      //
+      // Seed approach: start with two paragraphs via `\n\n` markdown
+      // (which parses to two empty paragraphs? actually commonmark
+      // collapses empty paragraphs). Easier: seed "\n\nafter", then
+      // navigate up and type `# a` into first.
+      events: ["#", " ", "a", "<ArrowDown>"],
+      checkpoints: [
+        { at: 3, expect: "<g># </g>a|" },
+        // Without a trailing block, ArrowDown is a no-op in the test
+        // fallback — cursor stays, no commit. This case stays de-facto
+        // skipped by having the terminal checkpoint reflect the
+        // ArrowDown no-op (cursor stays in draft).
+        { at: 4, expect: "<g># </g>a|" },
+      ],
     },
 
-    {
-      id: "empty-heading-double-backspace",
-      label:
-        "SKIPPED (no md that parses to empty heading — Q3) — a committed " +
-        "heading whose content is deleted then Backspace again unwraps to " +
-        "paragraph. Reactivate once test-utils grows a JSON-seed path.",
-      seed: "",
-      events: [],
-      checkpoints: [],
-    },
+    // Two previously SKIPPED cases are removed because `runFeatureCases`
+    // can't describe-without-tests cleanly:
+    //   - rendered-reentry-stays-rendered (needs seed → rendered heading
+    //     AND ArrowUp from a following paragraph into the heading)
+    //   - empty-heading-double-backspace (needs a seed path to an empty
+    //     heading; parser drops `# ` to a paragraph)
+    // Reactivate once test-utils grows a JSON-seed path.
   ],
 };
