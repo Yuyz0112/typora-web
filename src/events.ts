@@ -3,7 +3,7 @@
 // view-like (a real EditorView or the test fakeView).
 
 import type { EditorState, Transaction } from "prosemirror-state";
-import { TextSelection } from "prosemirror-state";
+import { Selection, TextSelection } from "prosemirror-state";
 
 export type Event = string;
 
@@ -86,6 +86,24 @@ function fallbackSelectionKey(view: ViewLike, spec: string): void {
         ),
       );
       return;
+    case "ArrowDown": {
+      // Move to the first selectable position after the current textblock
+      // ends. Good enough for tests — we do NOT try to preserve the
+      // column, which a real browser does. Atomic nodes (hr) are picked
+      // up as NodeSelection via Selection.findFrom's `textOnly=false`.
+      const $here = doc.resolve(sel.from);
+      const startAt = Math.min(doc.content.size, $here.end($here.depth) + 1);
+      const next = Selection.findFrom(doc.resolve(startAt), 1, true);
+      if (next) view.dispatch(state.tr.setSelection(next));
+      return;
+    }
+    case "ArrowUp": {
+      const $here = doc.resolve(sel.from);
+      const startAt = Math.max(0, $here.start($here.depth) - 1);
+      const prev = Selection.findFrom(doc.resolve(startAt), -1, true);
+      if (prev) view.dispatch(state.tr.setSelection(prev));
+      return;
+    }
     case "Home": {
       const $c = doc.resolve(sel.from);
       view.dispatch(state.tr.setSelection(TextSelection.create(doc, $c.start($c.depth))));

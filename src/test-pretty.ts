@@ -62,7 +62,10 @@ function renderNode(n: Node): string {
     case "h4":
     case "h5":
     case "h6":
-      return `${"#".repeat(Number(tag[1]))} ${children}`;
+      // Keep the tag so a rendered heading is distinguishable from a
+      // paragraph whose text happens to start with `#{1,6} ` (method-B
+      // draft state). `#` / level is already encoded in the tag name.
+      return `<${tag}>${children}</${tag}>`;
     case "br":
       return "<br/>";
     case "hr":
@@ -73,10 +76,13 @@ function renderNode(n: Node): string {
         .map((line) => `> ${line}`)
         .join("\n");
     case "pre": {
-      // <pre data-lang="ts"><code>text</code></pre>
+      // <pre data-lang="ts"><code>text</code></pre>. Recurse through the
+      // `<code>` child instead of reading textContent — textContent skips
+      // zero-text widget spans (e.g. PM's play-caret), so we'd lose the
+      // `|` marker when the cursor lives inside the code block.
       const codeEl = el.querySelector("code");
       const lang = el.getAttribute("data-lang") ?? "";
-      const text = codeEl?.textContent ?? "";
+      const text = codeEl ? renderNode(codeEl) : "";
       return `\`\`\`${lang}\n${text}\n\`\`\``;
     }
     case "ul":
@@ -96,8 +102,15 @@ function renderNode(n: Node): string {
         })
         .join("\n");
     }
-    case "li":
-      return children; // parent ul/ol supplies the prefix
+    case "li": {
+      // Join block children with `\n` so that a multi-block li (e.g. list's
+      // staircase-exit intermediate state where an outer li contains a
+      // paragraph + nested ul + trailing paragraph) renders with one line
+      // per block. The parent ul/ol then indents continuation lines by the
+      // prefix width — so the trailing bulletless paragraph shows up as
+      // `  |` (indented, no bullet), distinct from a top-level paragraph.
+      return Array.from(el.children).map(renderNode).join("\n");
+    }
     default:
       return children;
   }
