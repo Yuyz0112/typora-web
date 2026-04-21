@@ -341,19 +341,19 @@ export const list: FeatureSpec = {
     {
       id: "staircase-exit",
       label: "Nested empty item + repeated Enter: 3-step Typora staircase",
+      // setup() places the cursor at doc end, which is already end of `b`.
       seed: "- a\n  - b",
-      events: ["<End>", "<Enter>", "<Enter>", "<Enter>", "<Enter>"],
+      events: ["<Enter>", "<Enter>", "<Enter>", "<Enter>"],
       checkpoints: [
-        { at: 1, expect: "- a\n  - b|" },
         // Enter 1: splitListItem — new empty nested sibling.
-        { at: 2, expect: "- a\n  - b\n  - |" },
+        { at: 1, expect: "- a\n  - b\n  - |" },
         // Enter 2: bulletless intermediate — empty nested li becomes a
         // bare paragraph appended to the outer li (after the nested ul).
-        { at: 3, expect: "- a\n  - b\n  <li-tail>|</li-tail>" },
+        { at: 2, expect: "- a\n  - b\n  <li-tail>|</li-tail>" },
         // Enter 3: bulletless p is promoted to outer-sibling list_item.
-        { at: 4, expect: "- a\n  - b\n- |" },
+        { at: 3, expect: "- a\n  - b\n- |" },
         // Enter 4: liftListItem exits the list entirely.
-        { at: 5, expect: "- a\n  - b\n|" },
+        { at: 4, expect: "- a\n  - b\n|" },
       ],
     },
 
