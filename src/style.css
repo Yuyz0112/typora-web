@@ -81,6 +81,33 @@ html, body { margin: 0; padding: 0; font: 16px/1.6 -apple-system, system-ui, san
  * cursor is inside a matching paragraph. The `# ` prefix itself wears
  * `.syntax-hint` which already forces font-weight: normal, so only the
  * real content ends up bold. */
+/* ── Fenced code block NodeView chrome ──────────────────────────────── */
+.ProseMirror pre { position: relative; }
+.ProseMirror pre .cb-chrome {
+  display: none;
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
+  user-select: none;
+}
+.ProseMirror pre.cb-active .cb-chrome { display: block; }
+.ProseMirror pre .cb-lang-input {
+  width: 80px;
+  padding: 2px 6px;
+  font: 12px ui-monospace, SFMono-Regular, Menlo, monospace;
+  border: 1px solid #d0d0d0;
+  border-radius: 4px;
+  background: #fff;
+  color: #333;
+  outline: none;
+}
+.ProseMirror pre .cb-lang-input:focus {
+  border-color: #7c3aed;
+}
+/* Hide PM's caret inside the code body when the virtual caret lives in
+ * the lang input — test-pretty mirrors this by suppressing `|`. */
+.ProseMirror pre.cb-lang-focus .play-caret { display: none; }
+
 .ProseMirror .heading-draft-1,
 .ProseMirror .heading-draft-2,
 .ProseMirror .heading-draft-3,

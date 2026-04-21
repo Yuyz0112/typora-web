@@ -1,5 +1,16 @@
-import type { Schema } from "prosemirror-model";
-import { TextSelection } from "prosemirror-state";
+import type { Node as PMNode, Schema } from "prosemirror-model";
+import {
+  Plugin,
+  PluginKey,
+  TextSelection,
+  type EditorState,
+} from "prosemirror-state";
+import {
+  Decoration,
+  DecorationSet,
+  type EditorView,
+  type NodeView,
+} from "prosemirror-view";
 
 import { leaveLineDraft } from "../block-draft.ts";
 import type { FeatureSpec } from "./_types.ts";
@@ -21,13 +32,355 @@ import type { FeatureSpec } from "./_types.ts";
 //      paragraph → code_block(lang), cursor already mapped OUTSIDE
 //      the block by PM's selection update.
 //
-// Out of scope for this round (tracked as TODOs for follow-up work):
-//   - lang-input NodeView overlay (harness-only visual affordance)
-//   - autocomplete dropdown for lang values
-//   - vertical key navigation between a lang input and the code body
-//   - empty code_block double-Backspace collapse-to-paragraph
+// Post-commit affordances implemented here:
+//
+//   - NodeView renders a chrome overlay next to the `<code>` body
+//     containing a `<input class="cb-lang-input">` for editing the
+//     code_block's `lang` attribute. Chrome shows only when the caret
+//     is inside the block (CSS-only: decoration toggles `cb-active`).
+//
+//   - Arrow navigation: from the LAST position of the main code body,
+//     ArrowDown "enters" the lang input (a virtual plugin state).
+//     From the lang input, ArrowUp returns to the end of the main body.
+//     From a block IMMEDIATELY AFTER a code_block, ArrowUp enters that
+//     preceding code_block's lang input instead of the usual last-line.
+//
+//     The lang-focus state is tracked by a PluginKey and visualized
+//     three ways:
+//       * NodeView adds `cb-lang-focus` class to the outer <pre>, which
+//         CSS uses to hide the .play-caret inside the code body and
+//         focus() the input.
+//       * Pretty renderCase reads `data-lang-focus` on <pre> and emits
+//         the `|` marker AFTER the lang string instead of inside the
+//         code body.
+//       * PM selection is kept at the end of the code body so that
+//         "leaving" the lang input naturally resumes editing there.
 
 const FENCE_RE = /^```(\w*)$/;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// lang-focus plugin state: which code_block (by pos) currently owns the
+// virtual cursor inside its lang input. Empty = cursor lives in PM doc.
+// ─────────────────────────────────────────────────────────────────────────────
+
+type LangFocus = { pos: number } | null;
+
+const langFocusKey = new PluginKey<LangFocus>("fencedCodeLangFocus");
+
+export function getLangFocus(state: EditorState): LangFocus {
+  return langFocusKey.getState(state) ?? null;
+}
+
+// Find the pos of the code_block containing a doc position, or null.
+function codeBlockPosAt(state: EditorState, pos: number): number | null {
+  const $ = state.doc.resolve(pos);
+  for (let d = $.depth; d >= 0; d--) {
+    const node = $.node(d);
+    if (node.type.name === "code_block") return $.before(d);
+  }
+  return null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NodeView: outer <pre data-lang><code/></pre> plus a chrome overlay with
+// a <input class="cb-lang-input">. The input mutates code_block.attrs.lang
+// via setNodeAttribute.
+// ─────────────────────────────────────────────────────────────────────────────
+
+class CodeBlockView implements NodeView {
+  dom: HTMLElement;
+  contentDOM: HTMLElement;
+  private chromeEl: HTMLElement;
+  private inputEl: HTMLInputElement;
+  private view: EditorView;
+  private getPos: () => number | undefined;
+
+  constructor(
+    node: PMNode,
+    view: EditorView,
+    getPos: () => number | undefined,
+    decorations: readonly Decoration[] = [],
+  ) {
+    this.view = view;
+    this.getPos = getPos;
+    const pre = document.createElement("pre");
+    const lang = (node.attrs.lang as string) ?? "";
+    if (lang) pre.setAttribute("data-lang", lang);
+    const code = document.createElement("code");
+    pre.appendChild(code);
+
+    const chrome = document.createElement("div");
+    chrome.className = "cb-chrome";
+    chrome.setAttribute("contenteditable", "false");
+    const input = document.createElement("input");
+    input.className = "cb-lang-input";
+    input.placeholder = "lang";
+    input.value = lang;
+    input.spellcheck = false;
+    chrome.appendChild(input);
+    pre.appendChild(chrome);
+
+    this.dom = pre;
+    this.contentDOM = code;
+    this.chromeEl = chrome;
+    this.inputEl = input;
+
+    input.addEventListener("input", this.onInput);
+    input.addEventListener("keydown", this.onInputKeyDown);
+    input.addEventListener("mousedown", (e) => e.stopPropagation());
+    // Apply initial decorations (PM doesn't call update() right after
+    // construction with the starting deco set — do it manually).
+    this.applyDecorations(decorations);
+  }
+
+  private applyDecorations(decorations: readonly Decoration[]): void {
+    let active = false;
+    let langFocus = false;
+    for (const d of decorations) {
+      const spec = (d as unknown as { spec?: { cbActive?: boolean; cbLangFocus?: boolean } }).spec;
+      if (spec?.cbActive) active = true;
+      if (spec?.cbLangFocus) langFocus = true;
+    }
+    this.dom.classList.toggle("cb-active", active || langFocus);
+    this.dom.classList.toggle("cb-lang-focus", langFocus);
+    if (langFocus) this.dom.setAttribute("data-lang-focus", "1");
+    else this.dom.removeAttribute("data-lang-focus");
+    if (langFocus && typeof this.inputEl.focus === "function") {
+      try { this.inputEl.focus(); } catch { /* ignore */ }
+    }
+  }
+
+  private onInput = (): void => {
+    const pos = this.getPos();
+    if (pos == null) return;
+    const newLang = this.inputEl.value;
+    const tr = this.view.state.tr.setNodeAttribute(pos, "lang", newLang);
+    // Preserve virtual lang-focus across the tr (setMeta to same pos).
+    tr.setMeta(langFocusKey, { pos });
+    this.view.dispatch(tr);
+  };
+
+  private onInputKeyDown = (e: KeyboardEvent): void => {
+    if (e.key === "ArrowUp" || (e.key === "Enter" && !e.shiftKey)) {
+      e.preventDefault();
+      const pos = this.getPos();
+      if (pos == null) return;
+      const node = this.view.state.doc.nodeAt(pos);
+      if (!node) return;
+      // Move PM selection to end of code body, clear lang-focus.
+      const endInside = pos + node.nodeSize - 1;
+      const tr = this.view.state.tr.setSelection(
+        TextSelection.create(this.view.state.doc, endInside),
+      );
+      tr.setMeta(langFocusKey, null);
+      this.view.dispatch(tr);
+      this.view.focus();
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      const pos = this.getPos();
+      if (pos == null) return;
+      const node = this.view.state.doc.nodeAt(pos);
+      if (!node) return;
+      const afterBlock = pos + node.nodeSize;
+      const tr = this.view.state.tr;
+      tr.setMeta(langFocusKey, null);
+      if (afterBlock < this.view.state.doc.content.size) {
+        tr.setSelection(TextSelection.create(tr.doc, afterBlock + 1));
+      } else {
+        // At doc end: append a paragraph below (Typora style).
+        const paraType = this.view.state.schema.nodes.paragraph;
+        const newPara = paraType?.createAndFill();
+        if (newPara) {
+          tr.insert(afterBlock, newPara);
+          tr.setSelection(TextSelection.create(tr.doc, afterBlock + 1));
+        }
+      }
+      this.view.dispatch(tr);
+      this.view.focus();
+    }
+  };
+
+  update(node: PMNode, decorations: readonly Decoration[]): boolean {
+    if (node.type.name !== "code_block") return false;
+    const lang = (node.attrs.lang as string) ?? "";
+    if (lang) this.dom.setAttribute("data-lang", lang);
+    else this.dom.removeAttribute("data-lang");
+    if (this.inputEl.value !== lang) this.inputEl.value = lang;
+    this.applyDecorations(decorations);
+    return true;
+  }
+
+  // The input is non-PM DOM; PM should not process clicks/keys inside it.
+  stopEvent(e: Event): boolean {
+    return this.chromeEl.contains(e.target as Node);
+  }
+
+  ignoreMutation(m: { target: Node }): boolean {
+    return this.chromeEl.contains(m.target);
+  }
+
+  destroy(): void {
+    this.inputEl.removeEventListener("input", this.onInput);
+    this.inputEl.removeEventListener("keydown", this.onInputKeyDown);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Plugin: nodeView registration, chrome-visibility decorations, lang-focus
+// state, and ArrowUp/Down handlers for crossing main ↔ lang-input.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function fencedCodeChromePlugin(): Plugin<LangFocus> {
+  return new Plugin<LangFocus>({
+    key: langFocusKey,
+    state: {
+      init: () => null,
+      apply: (tr, old) => {
+        const m = tr.getMeta(langFocusKey);
+        if (m === null) return null;
+        if (m !== undefined) return m as LangFocus;
+        // Map old pos through tr.mapping; if code_block no longer exists, drop.
+        if (!old) return null;
+        const mapped = tr.mapping.map(old.pos);
+        const node = tr.doc.nodeAt(mapped);
+        if (!node || node.type.name !== "code_block") return null;
+        return { pos: mapped };
+      },
+    },
+    props: {
+      nodeViews: {
+        code_block: (node, view, getPos, decorations) =>
+          new CodeBlockView(node, view, getPos, decorations as readonly Decoration[]),
+      },
+      decorations(state) {
+        const decos: Decoration[] = [];
+        // Active = cursor sits inside a code_block.
+        const sel = state.selection;
+        if (sel.empty) {
+          const cbPos = codeBlockPosAt(state, sel.from);
+          if (cbPos !== null) {
+            const node = state.doc.nodeAt(cbPos);
+            if (node) {
+              decos.push(
+                Decoration.node(
+                  cbPos,
+                  cbPos + node.nodeSize,
+                  { class: "cb-active" },
+                  { cbActive: true },
+                ),
+              );
+            }
+          }
+        }
+        const lf = langFocusKey.getState(state);
+        if (lf) {
+          const node = state.doc.nodeAt(lf.pos);
+          if (node && node.type.name === "code_block") {
+            decos.push(
+              Decoration.node(
+                lf.pos,
+                lf.pos + node.nodeSize,
+                { class: "cb-active cb-lang-focus" },
+                { cbActive: true, cbLangFocus: true },
+              ),
+            );
+          }
+        }
+        return decos.length > 0 ? DecorationSet.create(state.doc, decos) : null;
+      },
+      handleKeyDown(view, e) {
+        if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return false;
+        if (e.shiftKey || e.metaKey || e.ctrlKey || e.altKey) return false;
+        const state = view.state;
+        const lf = langFocusKey.getState(state);
+
+        // Case A: already in lang-focus → ArrowUp exits back to code body,
+        // ArrowDown exits to the block below (or spawns one).
+        if (lf) {
+          const node = state.doc.nodeAt(lf.pos);
+          if (!node || node.type.name !== "code_block") {
+            view.dispatch(state.tr.setMeta(langFocusKey, null));
+            return true;
+          }
+          if (e.key === "ArrowUp") {
+            const endInside = lf.pos + node.nodeSize - 1;
+            const tr = state.tr
+              .setSelection(TextSelection.create(state.doc, endInside))
+              .setMeta(langFocusKey, null);
+            view.dispatch(tr);
+            return true;
+          }
+          // ArrowDown
+          const afterBlock = lf.pos + node.nodeSize;
+          const tr = state.tr.setMeta(langFocusKey, null);
+          if (afterBlock < state.doc.content.size) {
+            tr.setSelection(TextSelection.create(tr.doc, afterBlock + 1));
+          } else {
+            const paraType = state.schema.nodes.paragraph;
+            const newPara = paraType?.createAndFill();
+            if (newPara) {
+              tr.insert(afterBlock, newPara);
+              tr.setSelection(TextSelection.create(tr.doc, afterBlock + 1));
+            }
+          }
+          view.dispatch(tr);
+          return true;
+        }
+
+        const sel = state.selection;
+        if (!sel.empty) return false;
+        const $from = sel.$from;
+
+        // Case B: cursor at END of a code_block's body → ArrowDown enters
+        // that code_block's lang input.
+        if (
+          e.key === "ArrowDown" &&
+          $from.parent.type.name === "code_block" &&
+          $from.parentOffset === $from.parent.content.size
+        ) {
+          const cbPos = $from.before();
+          // PM selection stays put (end of code body); lang-focus hides
+          // the caret via `data-lang-focus` + CSS `.cb-lang-focus
+          // .play-caret{display:none}` and the pretty renderCase.
+          view.dispatch(state.tr.setMeta(langFocusKey, { pos: cbPos }));
+          return true;
+        }
+
+        // Case C: cursor at START of a block whose previous sibling is a
+        // code_block → ArrowUp enters that preceding code_block's lang input.
+        if (
+          e.key === "ArrowUp" &&
+          $from.depth >= 1 &&
+          $from.parentOffset === 0
+        ) {
+          const parentPos = $from.before();
+          if (parentPos > 0) {
+            // Previous sibling starts at the depth-1 index just before.
+            const $before = state.doc.resolve(parentPos);
+            const index = $before.index();
+            if (index > 0) {
+              const prev = $before.parent.child(index - 1);
+              if (prev.type.name === "code_block") {
+                const prevPos = parentPos - prev.nodeSize;
+                // Park PM selection at the end of the prev code_block's body
+                // so the PM caret isn't left in the block below. It gets
+                // hidden by `data-lang-focus`; on ArrowUp-exit it becomes
+                // visible at the body end, which is what the user wants.
+                const endInside = prevPos + prev.nodeSize - 1;
+                const tr = state.tr
+                  .setSelection(TextSelection.create(state.doc, endInside))
+                  .setMeta(langFocusKey, { pos: prevPos });
+                view.dispatch(tr);
+                return true;
+              }
+            }
+          }
+        }
+        return false;
+      },
+    },
+  });
+}
 
 function makeFencedPlugin(schema: Schema) {
   return leaveLineDraft<{ lang: string }>({
@@ -53,7 +406,7 @@ function makeFencedPlugin(schema: Schema) {
 export const fencedCode: FeatureSpec = {
   name: "code_block",
 
-  plugins: (schema) => [makeFencedPlugin(schema).plugin],
+  plugins: (schema) => [makeFencedPlugin(schema).plugin, fencedCodeChromePlugin()],
 
   // test-pretty renderCase for <pre>. Overrides the core switch branch
   // because core delegates `renderNode(codeEl)` back through the feature
@@ -63,9 +416,16 @@ export const fencedCode: FeatureSpec = {
   // Here we walk <code>'s children ourselves (so the play-caret widget
   // still surfaces as `|` and the trailing-<br/> placeholder is filtered)
   // without passing through the featureRenderCases["code"] wrapper.
+  //
+  // NodeView additions the renderCase must respect:
+  //   * <div class="cb-chrome"> is a sibling of <code>; ignored for md.
+  //   * When the <pre> has attr `data-lang-focus`, the caret lives in
+  //     the lang input (virtual) and must NOT be rendered inside <code>.
+  //     Instead, emit `|` after the lang string in the opening fence.
   renderCases: {
     pre: (_children, el) => {
       const lang = el.getAttribute("data-lang") ?? "";
+      const langFocus = el.hasAttribute("data-lang-focus");
       const codeEl = el.querySelector("code");
       let text = "";
       if (codeEl) {
@@ -76,8 +436,11 @@ export const fencedCode: FeatureSpec = {
             const childEl = child as Element;
             const tag = childEl.tagName.toLowerCase();
             const list = childEl.classList;
-            if (tag === "span" && list.contains("play-caret")) text += "|";
-            else if (tag === "span" && list.contains("selection-marker"))
+            if (tag === "span" && list.contains("play-caret")) {
+              // Suppress the PM-level caret when the virtual cursor is
+              // in the lang input — see the data-lang-focus branch below.
+              if (!langFocus) text += "|";
+            } else if (tag === "span" && list.contains("selection-marker"))
               text += childEl.textContent ?? "";
             else if (tag === "br" && list.contains("ProseMirror-trailingBreak")) {
               // skip PM's empty-textblock placeholder
@@ -87,7 +450,8 @@ export const fencedCode: FeatureSpec = {
           }
         }
       }
-      return `\`\`\`${lang}\n${text}\n\`\`\``;
+      const openFence = langFocus ? `\`\`\`${lang}|` : `\`\`\`${lang}`;
+      return `${openFence}\n${text}\n\`\`\``;
     },
   },
 
@@ -249,13 +613,52 @@ export const fencedCode: FeatureSpec = {
       ],
     },
 
-    // Out-of-scope this round (see top-of-file notes):
-    //   - arrow-leave commit (depends on ArrowUp/Down events landing
-    //     on a neighbouring textblock; unit-testable once the test
-    //     fixture grows a pre-seeded trailing paragraph)
-    //   - autocomplete-click imperative commit (separate unit test
-    //     that instantiates a view and calls handle.commit)
-    //   - lang-input NodeView overlay visibility
-    //   - Backspace-to-collapse empty code_block
+    // ──────────────────────────────────────────────────────────────
+    // 8. NodeView: ArrowDown from end of main body enters the virtual
+    //    lang input. Pretty: the `|` moves from inside <code> to after
+    //    the lang string in the opening fence.
+    // ──────────────────────────────────────────────────────────────
+    {
+      id: "arrow-down-enters-lang",
+      label: "main body end + ArrowDown → caret virtually in lang input",
+      seed: "```ts\nfoo\n```",
+      events: ["<ArrowDown>"],
+      checkpoints: [
+        { at: 0, expect: "```ts\nfoo|\n```" },
+        { at: 1, expect: "```ts|\nfoo\n```" },
+      ],
+    },
+
+    // ──────────────────────────────────────────────────────────────
+    // 9. ArrowUp from lang input → returns to end of main body.
+    // ──────────────────────────────────────────────────────────────
+    {
+      id: "arrow-up-back-to-main",
+      label: "lang input + ArrowUp → caret back to end of main body",
+      seed: "```ts\nfoo\n```",
+      events: ["<ArrowDown>", "<ArrowUp>"],
+      checkpoints: [
+        { at: 1, expect: "```ts|\nfoo\n```" },
+        { at: 2, expect: "```ts\nfoo|\n```" },
+      ],
+    },
+
+    // ──────────────────────────────────────────────────────────────
+    // 10. Below-block ArrowUp lands in the lang input (not main body).
+    //     Seed has a trailing paragraph below the code_block.
+    // ──────────────────────────────────────────────────────────────
+    {
+      id: "below-block-arrow-up-enters-lang",
+      label: "paragraph below code_block + ArrowUp → prev block's lang input",
+      seed: "```ts\nfoo\n```\n\nhello",
+      events: ["<Home>", "<ArrowUp>"],
+      checkpoints: [
+        // After Home: caret at start of "hello" paragraph.
+        { at: 1, expect: "```ts\nfoo\n```\n|hello" },
+        // ArrowUp from start-of-block: enters the lang input of the
+        // preceding code_block.
+        { at: 2, expect: "```ts|\nfoo\n```\nhello" },
+      ],
+    },
   ],
 };
