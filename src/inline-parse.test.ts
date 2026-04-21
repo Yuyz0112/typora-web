@@ -45,9 +45,13 @@ describe("parseInline", () => {
     expect(parseInline("* 1 *")).toEqual([]);
   });
 
-  test("*a*b* — outermost em, inner asterisk preserved in content", () => {
+  test("*a*b* — L→R stack pairing closes at first close run", () => {
+    // Stack-based pairing (CommonMark style): first `*` opens, second
+    // `*` closes → em("a"); trailing `*` has no open left on stack.
+    // (Old "outermost" rule bridged to the last `*`, which also caused
+    // the `_em_ __strong__` bridging bug — see emphasis.ts.)
     expect(parseInline("*a*b*")).toEqual([
-      { type: "em", from: 1, to: 4, openFrom: 0, openTo: 1, closeFrom: 4, closeTo: 5 },
+      { type: "em", from: 1, to: 2, openFrom: 0, openTo: 1, closeFrom: 2, closeTo: 3 },
     ]);
   });
 

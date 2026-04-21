@@ -15,10 +15,14 @@ import type { FeatureSpec, InlineFeatureSpec } from "./_types.ts";
 // stays plain while `word _em_ word` fires. The two scans share the
 // `consumed` bitmap; asterisk goes first because it is strictly looser.
 //
-// Typora-style greedy outermost: leftmost canOpen run pairs with the
-// rightmost canClose run; open delims are consumed from the LEFT of the
-// run, close delims from the RIGHT — so `**1*` pairs as em("*1") with
-// outer `*`s as delims (CommonMark would go the other way).
+// Stack-based L→R pairing (CommonMark style): unclosed open runs live
+// on a stack; each run that canClose pops the nearest open run and
+// pairs with it. Open delims are consumed from the LEFT of the run,
+// close delims from the RIGHT — so `**1*` still pairs as em("*1") with
+// outer `*`s as delims (the nearest open run on the stack IS the
+// adjacent `**`). The old "leftmost open + rightmost close" scheme
+// bridged independent groups across whitespace (e.g. `_em_ __strong__`
+// became one big em span).
 
 const isAlnum = (c: string): boolean => /[A-Za-z0-9]/.test(c);
 
@@ -32,44 +36,39 @@ function scanOneDelim(text: string, delim: string, consumed: Uint8Array, out: In
       if (isAlnum(after)) r.canClose = false;
     }
   }
-  const used = new Set<number>();
-  for (let a = 0; a < runs.length; a++) {
-    if (used.has(a)) continue;
-    const open = runs[a]!;
-    if (!open.canOpen) continue;
-    let b = -1;
-    for (let k = runs.length - 1; k > a; k--) {
-      if (used.has(k)) continue;
-      if (runs[k]!.canClose) {
-        b = k;
-        break;
-      }
+  const stack: number[] = [];
+  for (let i = 0; i < runs.length; i++) {
+    const run = runs[i]!;
+    // Prefer close when both are possible and the stack has a candidate —
+    // matches CommonMark "close first" for double-role runs like `*`.
+    if (run.canClose && stack.length > 0) {
+      const a = stack.pop()!;
+      const open = runs[a]!;
+      const close = run;
+
+      const wantLen = Math.min(open.len, close.len) >= 2 ? 2 : 1;
+      const openFrom = open.pos;
+      const openTo = openFrom + wantLen;
+      const closeTo = close.pos + close.len;
+      const closeFrom = closeTo - wantLen;
+      const innerFrom = openTo;
+      const innerTo = closeFrom;
+      if (innerFrom >= innerTo) continue;
+      if (/\s/.test(text[innerFrom]!) || /\s/.test(text[innerTo - 1]!)) continue;
+
+      markConsumed(consumed, openFrom, closeTo);
+      out.push({
+        type: wantLen === 2 ? "strong" : "em",
+        from: innerFrom,
+        to: innerTo,
+        openFrom,
+        openTo,
+        closeFrom,
+        closeTo,
+      });
+      continue;
     }
-    if (b === -1) continue;
-    const close = runs[b]!;
-
-    const wantLen = Math.min(open.len, close.len) >= 2 ? 2 : 1;
-    const openFrom = open.pos;
-    const openTo = openFrom + wantLen;
-    const closeTo = close.pos + close.len;
-    const closeFrom = closeTo - wantLen;
-    const innerFrom = openTo;
-    const innerTo = closeFrom;
-    if (innerFrom >= innerTo) continue;
-    if (/\s/.test(text[innerFrom]!) || /\s/.test(text[innerTo - 1]!)) continue;
-
-    markConsumed(consumed, openFrom, closeTo);
-    used.add(a);
-    used.add(b);
-    out.push({
-      type: wantLen === 2 ? "strong" : "em",
-      from: innerFrom,
-      to: innerTo,
-      openFrom,
-      openTo,
-      closeFrom,
-      closeTo,
-    });
+    if (run.canOpen) stack.push(i);
   }
 }
 
@@ -186,6 +185,15 @@ export const emphasis: FeatureSpec = {
         { at: 4, expect: "<g>_</g><i>_1</i><g>_</g>|" },
         { at: 5, expect: "<g>__</g><b>1</b><g>__</g>|" },
         { at: 6, expect: "<b>1</b> |" },
+      ],
+    },
+    {
+      id: "two-groups-underscore",
+      label: "_em_ __strong__ — two independent underscore groups",
+      seed: "",
+      events: ["_","e","m","_"," ","_","_","s","t","r","o","n","g","_","_"," "],
+      checkpoints: [
+        { at: 16, expect: "<i>em</i> <b>strong</b> |" },
       ],
     },
     {
