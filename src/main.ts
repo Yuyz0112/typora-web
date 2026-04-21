@@ -1,5 +1,5 @@
 import type { Node as PMNode } from "prosemirror-model";
-import { EditorState } from "prosemirror-state";
+import { EditorState, TextSelection } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 
 import { defaultPlugins } from "./editor.ts";
@@ -136,7 +136,16 @@ function createCard(script: Script, getSpeed: () => number): Card {
     const doc: PMNode = script.seed
       ? parse(script.seed)
       : schema.nodes.doc.createAndFill()!;
-    const state = EditorState.create({ schema, doc, plugins: defaultPlugins() });
+    // Match test-utils.ts:setup — cursor lands at doc end after seed parse.
+    // Otherwise cases like list's 3-step staircase (seed `- a\n  - b`) run
+    // the events against the WRONG starting cursor position (end of `a`
+    // instead of end of `b`) and produce visibly wrong DOM in the harness.
+    const state = EditorState.create({
+      schema,
+      doc,
+      selection: TextSelection.atEnd(doc),
+      plugins: defaultPlugins(),
+    });
     if (view) view.destroy();
     view = new EditorView($editor, { state });
     cursorIndex = 0;
