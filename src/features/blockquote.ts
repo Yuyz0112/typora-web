@@ -1,3 +1,7 @@
+import { InputRule } from "prosemirror-inputrules";
+import { TextSelection } from "prosemirror-state";
+import { findWrapping } from "prosemirror-transform";
+
 import type { FeatureSpec } from "./_types.ts";
 
 // Blockquote — no draft concept; input rule commits immediately.
@@ -8,24 +12,45 @@ import type { FeatureSpec } from "./_types.ts";
 // children joined by `\n`) — the tag form is what distinguishes a real
 // blockquote from a paragraph whose text happens to start with `> `.
 //
-// Enter behaviour inside a blockquote:
-//   - non-empty line → split, new line stays inside blockquote
-//   - empty line     → exit: remove the empty line, cursor lands in a
-//                      new paragraph after the blockquote
-//
-// Backspace behaviour (not fully exercised in stubs here):
-//   - emptying the only line keeps the blockquote (serialises to `> `)
-//   - one more Backspace unwraps the empty blockquote to paragraph
-//
-// OPEN QUESTIONS / flags:
-//   - seed-based cases rely on core parser handling multi-line
-//     blockquotes. The mid-line Enter split case is flagged — adjust
-//     seed / expect shape once parser layout confirmed.
-//   - Backspace-unwrap at end of life (emptied blockquote) is not
-//     included: depends on seed parse + keymap wiring that isn't
-//     spec'd yet.
+// Enter behaviour inside a blockquote is fully handled by
+// prosemirror-commands' baseKeymap (chainCommands of newlineInCode,
+// createParagraphNear, liftEmptyBlock, splitBlock):
+//   - non-empty line → splitBlock, new paragraph stays inside blockquote
+//   - empty line     → liftEmptyBlock lifts the empty paragraph out of
+//                      the blockquote, landing the cursor after it
+// So this feature does not contribute a keymap.
+
+// Input rule pattern: only fire once the user has typed `> ` PLUS a
+// further character. The captured char then becomes the blockquote's
+// first char — so a lone `> ` at the end of a paragraph is still a
+// plain paragraph with text "> ", not yet a blockquote.
+const BQ_INPUT_RE = /^> (.)$/;
+
 export const blockquote: FeatureSpec = {
   name: "blockquote",
+
+  inputRules: (schema) => [
+    new InputRule(BQ_INPUT_RE, (state, match, start, end) => {
+      const bqType = schema.nodes.blockquote;
+      if (!bqType) return null;
+      const trigger = match[1] ?? "";
+      // Replace the `> ` prefix + the yet-to-be-inserted trigger char
+      // with just the trigger char.
+      const tr = state.tr.replaceWith(start, end, state.schema.text(trigger));
+      // Resolve before the just-inserted trigger so blockRange wraps the
+      // whole paragraph.
+      const $start = tr.doc.resolve(start);
+      const range = $start.blockRange();
+      const wrapping = range && findWrapping(range, bqType);
+      if (!wrapping) return null;
+      tr.wrap(range, wrapping);
+      // Land the cursor after the trigger char. Wrapping adds one level
+      // of depth (one open token), so the cursor position shifts by +1.
+      const cursor = start + 1 + trigger.length;
+      tr.setSelection(TextSelection.create(tr.doc, cursor));
+      return tr;
+    }),
+  ],
 
   cases: [
     {
@@ -34,10 +59,7 @@ export const blockquote: FeatureSpec = {
       seed: "",
       events: [">", " ", "a"],
       checkpoints: [
-        // at=2: still paragraph with text `> ` — no trigger yet, no <bq>.
         { at: 2, expect: "> |" },
-        // at=3: input rule fires, wraps paragraph into blockquote,
-        // paragraph content is now just "a".
         { at: 3, expect: "<bq>a|</bq>" },
       ],
     },
@@ -48,8 +70,6 @@ export const blockquote: FeatureSpec = {
       seed: "",
       events: [">", " ", " "],
       checkpoints: [
-        // at=3: blockquote wrapping a paragraph whose content is a
-        // single space char.
         { at: 3, expect: "<bq> |</bq>" },
       ],
     },
@@ -71,7 +91,6 @@ export const blockquote: FeatureSpec = {
       events: [">", " ", "a", "<Enter>", "b"],
       checkpoints: [
         { at: 3, expect: "<bq>a|</bq>" },
-        // Second paragraph appears inside same blockquote (joined by \n).
         { at: 4, expect: "<bq>a\n|</bq>" },
         { at: 5, expect: "<bq>a\nb|</bq>" },
       ],
@@ -84,9 +103,6 @@ export const blockquote: FeatureSpec = {
       events: [">", " ", "a", "<Enter>", "<Enter>"],
       checkpoints: [
         { at: 4, expect: "<bq>a\n|</bq>" },
-        // Empty second line removed + cursor lands in a new paragraph
-        // outside the blockquote. Block separator is `\n` between
-        // top-level blocks, so blockquote + empty paragraph pretty is:
         { at: 5, expect: "<bq>a</bq>\n|" },
       ],
     },
@@ -94,9 +110,6 @@ export const blockquote: FeatureSpec = {
     {
       id: "mid-line-enter-splits",
       label: "Enter in the middle of a blockquote line → split, both halves stay inside",
-      // Pre-existing single-line blockquote; caret lands between `a`
-      // and `b` via Home + ArrowRight, then Enter splits the paragraph
-      // but keeps both halves inside the same blockquote.
       seed: "> ab",
       events: ["<Home>", "<ArrowRight>", "<Enter>"],
       checkpoints: [

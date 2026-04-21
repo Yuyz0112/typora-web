@@ -1,3 +1,6 @@
+import type { Schema } from "prosemirror-model";
+
+import { leaveLineDraft } from "../block-draft.ts";
 import type { FeatureSpec } from "./_types.ts";
 
 // horizontal_rule (HR).
@@ -12,31 +15,48 @@ import type { FeatureSpec } from "./_types.ts";
 // Adding a 4th char (or anything that breaks the `^[-*_]{3}$` match)
 // should drop the draft immediately — it's back to plain text.
 //
-// OPEN QUESTIONS:
-//   - pretty has `<hr>` → `"---"` and paragraph text `"---"` → `"---"`,
-//     so the pre-commit and post-commit block forms look identical in
-//     isolation. We distinguish them via the cursor position:
-//       pre-commit  (draft):  `<g>---</g>|`           (caret in the
-//                                                      paragraph, delims
-//                                                      are a gray hint)
-//       post-commit (HR):     `---\n|`                (a new empty
-//                                                      paragraph below
-//                                                      the HR holds the
-//                                                      caret)
-//     If this is still ambiguous once implemented, we may need to flag
-//     test-pretty to mark HR nodes differently (e.g. `<hr/>`). Flagged
-//     but not acted on in this stub.
-//   - `<ArrowUp>` / `<ArrowDown>` are NOT currently handled by the
-//     event DSL (see events.ts). Typora also commits HR on Arrow leave,
-//     but we can only reach that with Enter in these tests. Arrow-leave
-//     cases deferred.
-//   - After Enter-commit, does the cursor land in a brand new empty
-//     paragraph under the HR (Typora behaviour), or stay on the line
-//     that just became the HR? Assumed: new empty paragraph below.
-//   - HR is selectable via arrow / click. Selection rendering (the
-//     focus indicator) isn't expressible in pretty today — not covered.
+// See `cases` below for the exact contract.
+
+type HRVariant = "-" | "*" | "_";
+
+const HR_RE = /^(-{3,}|\*{3,}|_{3,})$/;
+
+function makeHrPlugin(schema: Schema) {
+  return leaveLineDraft<{ variant: HRVariant }>({
+    match: (text) => {
+      const m = HR_RE.exec(text);
+      if (!m) return null;
+      return {
+        data: { variant: m[1]![0] as HRVariant },
+        // All leading chars (= the whole matched run) render gray.
+        prefixLen: m[1]!.length,
+      };
+    },
+    draftClass: () => "hr-draft",
+    commit: (tr, pos, paragraph) => {
+      const hrNode = schema.nodes.horizontal_rule!.create();
+      // If the HR would end up as the doc's last node, PM needs a
+      // trailing textblock for the caret to live in. Enter typically
+      // provides that via the baseKeymap splitBlock (which runs before
+      // our appendTransaction), but arrow-leave / click-leave / tests
+      // that don't go through Enter may leave the HR as the last node.
+      const parent = tr.doc.resolve(pos).parent;
+      const idxOfPara = tr.doc.resolve(pos).index();
+      const isLast = idxOfPara === parent.childCount - 1;
+      if (isLast) {
+        const empty = schema.nodes.paragraph!.create();
+        tr.replaceWith(pos, pos + paragraph.nodeSize, [hrNode, empty]);
+      } else {
+        tr.replaceWith(pos, pos + paragraph.nodeSize, hrNode);
+      }
+    },
+  });
+}
+
 export const hr: FeatureSpec = {
   name: "horizontal_rule",
+
+  plugins: (schema) => [makeHrPlugin(schema).plugin],
 
   cases: [
     {
@@ -45,13 +65,8 @@ export const hr: FeatureSpec = {
       seed: "",
       events: ["-", "-", "-", "<Enter>"],
       checkpoints: [
-        // at 2: two dashes — not yet a draft HR, plain text.
         { at: 2, expect: "--|" },
-        // at 3: three dashes, cursor still on the line → draft hint.
         { at: 3, expect: "<g>---</g>|" },
-        // at 4: Enter committed the HR; caret lives in a fresh empty
-        // paragraph below. See OPEN QUESTIONS for the post-commit
-        // cursor assumption.
         { at: 4, expect: "---\n|" },
       ],
     },
@@ -61,8 +76,6 @@ export const hr: FeatureSpec = {
       seed: "",
       events: ["*", "*", "*", "<Enter>"],
       checkpoints: [
-        // at 3: bare `***` on an empty line — HR draft, not an
-        // emphasis pair (no content between the runs).
         { at: 3, expect: "<g>***</g>|" },
         { at: 4, expect: "---\n|" },
       ],
@@ -83,10 +96,7 @@ export const hr: FeatureSpec = {
       seed: "",
       events: ["-", "-", "-", "a"],
       checkpoints: [
-        // at 3: draft active.
         { at: 3, expect: "<g>---</g>|" },
-        // at 4: text no longer matches `^[-*_]{3}$`, delims go back to
-        // plain chars (no gray hint).
         { at: 4, expect: "---a|" },
       ],
     },
@@ -96,10 +106,7 @@ export const hr: FeatureSpec = {
       seed: "",
       events: ["a", "-", "-", "-", "<Enter>"],
       checkpoints: [
-        // at 4: content is `a---`, which never matches the HR shape —
-        // no draft hint at any point.
         { at: 4, expect: "a---|" },
-        // Enter just inserts a new paragraph; no HR is produced.
         { at: 5, expect: "a---\n|" },
       ],
     },
