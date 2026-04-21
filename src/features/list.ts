@@ -5,8 +5,130 @@ import {
   sinkListItem,
   splitListItem,
 } from "prosemirror-schema-list";
+import { TextSelection, type Command } from "prosemirror-state";
+import type { NodeType } from "prosemirror-model";
 
 import type { FeatureSpec } from "./_types.ts";
+
+// ── Custom commands for Typora-style 3-step staircase exit ────────────────
+//
+// PM's default chain(splitListItem, liftListItem) on an empty nested li
+// jumps straight from "empty nested li" → "empty outer-sibling li". Typora
+// inserts an extra intermediate state: the empty nested li first becomes
+// a bulletless paragraph appended to the outer li's content (after the
+// nested ul). Only a second Enter promotes that paragraph to a real
+// outer-sibling list_item.
+
+// Fire when the cursor sits in an empty paragraph inside an empty NESTED
+// list_item (grandparent-of-li is itself a list_item). Delete the nested
+// li and append a bulletless paragraph to the outer li.
+function liftNestedEmptyItemToBulletless(
+  li: NodeType,
+  paragraph: NodeType,
+): Command {
+  return (state, dispatch) => {
+    const { $from, empty } = state.selection;
+    if (!empty) return false;
+    const p = $from.parent;
+    if (p.type !== paragraph || p.content.size !== 0) return false;
+    // depth of the paragraph is $from.depth; li is depth-1.
+    const liDepth = $from.depth - 1;
+    if (liDepth < 1) return false;
+    const liNode = $from.node(liDepth);
+    if (liNode.type !== li) return false;
+    // li must contain exactly one child (the empty paragraph) — otherwise
+    // this is a bulletless-tail case handled by the next command.
+    if (liNode.childCount !== 1) return false;
+    const listDepth = liDepth - 1;
+    if (listDepth < 1) return false;
+    const listNode = $from.node(listDepth);
+    if (
+      listNode.type.name !== "bullet_list" &&
+      listNode.type.name !== "ordered_list"
+    ) {
+      return false;
+    }
+    const outerLiDepth = listDepth - 1;
+    if (outerLiDepth < 1) return false;
+    const outerLi = $from.node(outerLiDepth);
+    if (outerLi.type !== li) return false;
+
+    const liStart = $from.before(liDepth);
+    const liEnd = $from.after(liDepth);
+    const outerLiEnd = $from.after(outerLiDepth);
+
+    if (dispatch) {
+      const tr = state.tr;
+      // If the nested li is the only child of the list, delete the whole
+      // list (schema disallows empty list). Otherwise just delete this li.
+      if (listNode.childCount === 1) {
+        tr.delete($from.before(listDepth), $from.after(listDepth));
+      } else {
+        tr.delete(liStart, liEnd);
+      }
+      // Insert an empty paragraph just before outerLi's close token.
+      const insertPos = tr.mapping.map(outerLiEnd) - 1;
+      const newPara = paragraph.createAndFill();
+      if (!newPara) return false;
+      tr.insert(insertPos, newPara);
+      tr.setSelection(TextSelection.create(tr.doc, insertPos + 1));
+      tr.scrollIntoView();
+      dispatch(tr);
+    }
+    return true;
+  };
+}
+
+// Fire when the cursor sits in an empty bulletless paragraph inside a
+// list_item (i.e. the paragraph is NOT the li's first child). Promote
+// that paragraph into a new list_item that becomes the outer li's next
+// sibling.
+function liftBulletlessParagraphToListItem(li: NodeType): Command {
+  return (state, dispatch) => {
+    const { $from, empty } = state.selection;
+    if (!empty) return false;
+    const p = $from.parent;
+    if (p.type.name !== "paragraph" || p.content.size !== 0) return false;
+    const pDepth = $from.depth;
+    const liDepth = pDepth - 1;
+    if (liDepth < 1) return false;
+    const liNode = $from.node(liDepth);
+    if (liNode.type !== li) return false;
+    // Determine this paragraph's index among li children — must NOT be 0.
+    const pIndex = $from.index(liDepth);
+    if (pIndex === 0) return false;
+    const listDepth = liDepth - 1;
+    if (listDepth < 1) return false;
+    const listNode = $from.node(listDepth);
+    if (
+      listNode.type.name !== "bullet_list" &&
+      listNode.type.name !== "ordered_list"
+    ) {
+      return false;
+    }
+
+    const pStart = $from.before(pDepth);
+    const pEnd = $from.after(pDepth);
+    const outerLiEnd = $from.after(liDepth);
+
+    if (dispatch) {
+      const tr = state.tr;
+      // Delete the paragraph from outer li.
+      tr.delete(pStart, pEnd);
+      // Build a new list_item containing an empty paragraph.
+      const newLi = li.createAndFill();
+      if (!newLi) return false;
+      // Insert just after outer li's close token (outerLiEnd mapped).
+      const insertPos = tr.mapping.map(outerLiEnd);
+      tr.insert(insertPos, newLi);
+      // Cursor inside the new li's paragraph: insertPos + 2 (open li, open p).
+      tr.setSelection(TextSelection.create(tr.doc, insertPos + 2));
+      tr.scrollIntoView();
+      dispatch(tr);
+    }
+    return true;
+  };
+}
 
 // Bullet list feature (method-B-adjacent; list_item is a block node).
 //
@@ -90,12 +212,28 @@ export const list: FeatureSpec = {
 
   keymap: (schema) => {
     const li = schema.nodes.list_item;
+    const p = schema.nodes.paragraph;
     return {
-      // splitListItem returns false on an empty item so next command can lift.
-      Enter: chainCommands(splitListItem(li), liftListItem(li)),
+      // 3-step staircase (Typora-style) for nested empty li:
+      //   1. splitListItem — non-empty li → new empty sibling
+      //   2. liftNestedEmptyItemToBulletless — empty nested li → bulletless
+      //      paragraph appended to outer li's content
+      //   3. liftBulletlessParagraphToListItem — bulletless p → real
+      //      outer-sibling list_item
+      //   4. liftListItem — empty outer li → exit list (PM default)
+      // NB: liftNestedEmptyItemToBulletless must run BEFORE splitListItem.
+      // PM's splitListItem "helpfully" handles empty-nested-last-item by
+      // creating an outer-sibling li (the 2-step staircase). We want the
+      // 3-step staircase, so we intercept the empty-nested case first and
+      // only fall through to splitListItem for non-empty items (where our
+      // custom command returns false).
+      Enter: chainCommands(
+        liftNestedEmptyItemToBulletless(li, p),
+        liftBulletlessParagraphToListItem(li),
+        splitListItem(li),
+        liftListItem(li),
+      ),
       Tab: sinkListItem(li),
-      // Typora doesn't bind Shift-Tab to un-nest; lifting is only via
-      // Enter-on-empty. Not wired here.
     };
   },
 
@@ -202,25 +340,20 @@ export const list: FeatureSpec = {
     //   Enter 3 → LIFT again: surfaces as sibling of `a` `- a\n  - b\n- |`
     {
       id: "staircase-exit",
-      label: "Nested empty item + repeated Enter lifts one level per Enter",
+      label: "Nested empty item + repeated Enter: 3-step Typora staircase",
       seed: "- a\n  - b",
-      events: ["<End>", "<Enter>", "<Enter>", "<Enter>"],
+      events: ["<End>", "<Enter>", "<Enter>", "<Enter>", "<Enter>"],
       checkpoints: [
-        // [VERIFY] <End> defensive — assume seed-parse puts cursor near b.
         { at: 1, expect: "- a\n  - b|" },
-        // Enter 1: new empty nested sibling at the inner level.
+        // Enter 1: splitListItem — new empty nested sibling.
         { at: 2, expect: "- a\n  - b\n  - |" },
-        // Enter 2: PM's chain(splitListItem, liftListItem) on an empty
-        // inner item skips the bulletless intermediate and lifts the
-        // empty item *directly* into an outer-sibling li. Typora's UX
-        // shows an extra "no-bullet, b-level indent" step in between —
-        // reproducing that needs a custom command (TODO, not in this
-        // round). The <li-tail> pretty affordance is still live in
-        // test-pretty for when that lands.
-        { at: 3, expect: "- a\n  - b\n- |" },
-        // Enter 3: the now-empty top-level item is lifted out of the
-        // list entirely → plain paragraph.
-        { at: 4, expect: "- a\n  - b\n|" },
+        // Enter 2: bulletless intermediate — empty nested li becomes a
+        // bare paragraph appended to the outer li (after the nested ul).
+        { at: 3, expect: "- a\n  - b\n  <li-tail>|</li-tail>" },
+        // Enter 3: bulletless p is promoted to outer-sibling list_item.
+        { at: 4, expect: "- a\n  - b\n- |" },
+        // Enter 4: liftListItem exits the list entirely.
+        { at: 5, expect: "- a\n  - b\n|" },
       ],
     },
 
