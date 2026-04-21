@@ -63,10 +63,6 @@ function renderNode(n: Node): string {
     case "h5":
     case "h6":
       return `${"#".repeat(Number(tag[1]))} ${children}`;
-    case "a": {
-      const href = el.getAttribute("href") ?? "";
-      return `<l:${href}>${children}</l>`;
-    }
     case "br":
       return "<br/>";
     case "hr":

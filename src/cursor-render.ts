@@ -7,17 +7,12 @@
 // `.ProseMirror-focused .play-caret { display: none }` hides this widget so
 // the native caret takes over. The two are mutually exclusive.
 //
-// `side` is chosen dynamically so the caret lines up with syntaxHints' gray
-// delimiters under the rule "cursor on a mark boundary renders outside the
-// mark":
-//   caret at an existing gray-close `to` → side +2 (after the close)
-//   caret at an existing gray-open `from` → side -2 (before the open)
-//   otherwise → 0
+// Under method-B the gray delims are inline decorations on real text chars
+// (not zero-width widgets), so the caret widget at a mark boundary already
+// sits naturally before/after those chars — no dynamic `side` needed.
 
 import { Plugin } from "prosemirror-state";
 import { Decoration, DecorationSet } from "prosemirror-view";
-
-import { deriveDecorations } from "./decorations.ts";
 
 export function cursorRenderPlugin(): Plugin {
   return new Plugin({
@@ -33,16 +28,9 @@ export function cursorRenderPlugin(): Plugin {
             Decoration.widget(sel.to, close, { side: 1 }),
           ]);
         }
-        const pos = sel.from;
-        const spans = deriveDecorations(state);
-        let side = 0;
-        for (const s of spans) {
-          if (s.to === pos) side = 2;
-          else if (s.from === pos) side = -2;
-        }
         const el = makeWidget("play-caret", "");
         return DecorationSet.create(state.doc, [
-          Decoration.widget(pos, el, { side }),
+          Decoration.widget(sel.from, el, { side: 0 }),
         ]);
       },
     },

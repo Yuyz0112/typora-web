@@ -93,12 +93,16 @@ export function normalizeInlinePlugin(): Plugin<NormalizeState> {
             off += child.nodeSize;
           });
 
-          if (arraysEqual(target, current)) continue;
+          // For attr-bearing marks (link) we can't represent "same mark"
+          // with a uint8 bitmap — always re-apply so attr changes (href,
+          // title) propagate even when coverage is unchanged.
+          const hasAttrs = spans.some((s) => s.type === name && s.attrs);
+          if (!hasAttrs && arraysEqual(target, current)) continue;
 
           tr.removeMark(blockStart, blockEnd, markType);
           for (const s of spans) {
             if (s.type === name)
-              tr.addMark(blockStart + s.from, blockStart + s.to, markType.create());
+              tr.addMark(blockStart + s.from, blockStart + s.to, markType.create(s.attrs));
           }
           changed = true;
         }

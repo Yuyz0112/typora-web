@@ -28,16 +28,7 @@ const mdEscapeInline = (ch: string): string =>
 const mdEscapeBlockStart = (ch: string): string =>
   /[#\->+*_]/.test(ch) ? `\\${ch}` : mdEscapeInline(ch);
 
-const coreMdMarks: Record<string, MarkSpec> = {
-  link: {
-    open: "[",
-    close: (mark) => {
-      const href = String(mark.attrs.href ?? "");
-      const title = mark.attrs.title as string | null;
-      return title ? `](${href} "${title.replace(/"/g, '\\"')}")` : `](${href})`;
-    },
-  },
-};
+const coreMdMarks: Record<string, MarkSpec> = {};
 
 export const mdConfig: SerializerConfig = {
   marks: { ...coreMdMarks, ...collectMarkDelims() },

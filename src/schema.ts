@@ -103,28 +103,7 @@ const coreNodes: Record<string, NodeSpec> = {
   },
 };
 
-const coreMarks: Record<string, MarkSpec> = {
-  link: {
-    attrs: {
-      href: {},
-      title: { default: null },
-    },
-    inclusive: false,
-    parseDOM: [
-      {
-        tag: "a[href]",
-        getAttrs: (el) => ({
-          href: (el as HTMLElement).getAttribute("href"),
-          title: (el as HTMLElement).getAttribute("title"),
-        }),
-      },
-    ],
-    toDOM: (mark) => {
-      const { href, title } = mark.attrs as { href: string; title: string | null };
-      return ["a", title ? { href, title } : { href }, 0];
-    },
-  },
-};
+const coreMarks: Record<string, MarkSpec> = {};
 
 const nodes = { ...coreNodes, ...collectNodes() };
 const marks = { ...coreMarks, ...collectMarks() };

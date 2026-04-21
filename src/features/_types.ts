@@ -62,7 +62,6 @@ export type FeatureSpec = {
   mdItPlugins?: Array<(md: MarkdownIt) => void>;
   parserTokens?: Record<string, TokenHandler>;
   markDelims?: Record<string, SerializerMarkSpec>;
-  decorationDelims?: Record<string, { open: string; close: string }>;
   inputRules?: (schema: Schema) => InputRule[];
   renderCases?: Record<string, RenderCase>;
   cases?: Case[];

@@ -19,6 +19,9 @@ export type InlineSpan = {
   openTo: number;
   closeFrom: number;
   closeTo: number;
+  // Optional mark attrs — used by features whose mark carries data, e.g.
+  // link's {href, title}. normalize passes these to markType.create(attrs).
+  attrs?: Record<string, unknown>;
 };
 
 export type Run = { pos: number; len: number; canOpen: boolean; canClose: boolean };

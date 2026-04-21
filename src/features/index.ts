@@ -4,9 +4,10 @@
 import type { Case, FeatureSpec, InlineFeatureSpec } from "./_types.ts";
 import { code } from "./code.ts";
 import { emphasis } from "./emphasis.ts";
+import { link } from "./link.ts";
 import { strike } from "./strike.ts";
 
-export const ALL_FEATURES: FeatureSpec[] = [emphasis, code, strike];
+export const ALL_FEATURES: FeatureSpec[] = [emphasis, code, strike, link];
 
 // Thin helpers that collect a named table from every feature. They are
 // the only place the core modules touch the registry, so each seam stays
@@ -26,9 +27,6 @@ export function collectParserTokens(): NonNullable<FeatureSpec["parserTokens"]> 
 }
 export function collectMarkDelims(): NonNullable<FeatureSpec["markDelims"]> {
   return Object.assign({}, ...ALL_FEATURES.map((f) => f.markDelims ?? {}));
-}
-export function collectDecorationDelims(): NonNullable<FeatureSpec["decorationDelims"]> {
-  return Object.assign({}, ...ALL_FEATURES.map((f) => f.decorationDelims ?? {}));
 }
 export function collectRenderCases(): NonNullable<FeatureSpec["renderCases"]> {
   return Object.assign({}, ...ALL_FEATURES.map((f) => f.renderCases ?? {}));

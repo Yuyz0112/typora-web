@@ -43,6 +43,12 @@ export class ParserState {
     this.marks = this.marks.filter((m) => m.type !== type);
   }
 
+  // Peek the currently-open mark of a given type (so a close-handler can
+  // read attrs before closing — link needs href for its close delim).
+  topMark(type: MarkType): Mark | undefined {
+    return this.marks.find((m) => m.type === type);
+  }
+
   openNode(type: NodeType, attrs: Attrs | null = null): void {
     this.stack.push({ type, attrs, content: [] });
   }
@@ -133,7 +139,7 @@ function handleBlock(state: ParserState, token: Token): void {
 }
 
 function handleInline(state: ParserState, token: Token): void {
-  const { marks, nodes } = schema;
+  const { nodes } = schema;
   switch (token.type) {
     case "text":
       state.addText(token.content);
@@ -144,15 +150,6 @@ function handleInline(state: ParserState, token: Token): void {
       return;
     case "hardbreak":
       state.push(nodes.hard_break.create());
-      return;
-    case "link_open": {
-      const href = token.attrGet("href") ?? "";
-      const title = token.attrGet("title");
-      state.openMark(marks.link.create({ href, title: title || null }));
-      return;
-    }
-    case "link_close":
-      state.closeMarkType(marks.link);
       return;
     default: {
       const handler = featureTokens[token.type];

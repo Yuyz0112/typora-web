@@ -113,8 +113,10 @@ describe("parser: inline marks", () => {
   });
 
   test("link without title has null title", () => {
+    // Method-B: text is `[x](url)` plain; the link mark covers only `x`
+    // in the middle child. child(0) is the opening `[`.
     const doc = parse("[x](https://example.com)");
-    const linkMark = doc.child(0).child(0).marks[0];
+    const linkMark = doc.child(0).child(1).marks[0];
     expect(linkMark.attrs.title).toBeNull();
   });
 

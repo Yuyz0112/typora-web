@@ -8,16 +8,16 @@ A Typora-style WYSIWYG Markdown editor built on ProseMirror.
 md text  ───────┐                                          (IO boundary; on-disk format)
                parse / serialize (doc must round-trip losslessly)
 PM doc + selection  ───── runtime authority
-  │   textblock text keeps source delim chars (`*`, `**`, `` ` ``, `~~`)
+  │   textblock text keeps source delim chars (`*`, `**`, `` ` ``, `~~`, `[`/`](href)`)
   │   inline marks = derived each transaction by `normalize` (method B)
   ↓
-deriveDecorations + normalize delims  — inline / widget decorations
+normalize delim ranges  — inline decorations (`syntax-hint` / `syntax-hidden`)
 view (DOM, built by PM EditorView)
 ```
 
 - **Runtime authority** is `EditorState = { doc, selection, storedMarks, plugins }`. Transactions and decoration logic live at the PM doc layer.
 - **md is not reactive**: it only appears at load / save / "show source" boundaries.
-- **Method B**: for every inline feature (em/strong/code/strike), the textblock's textContent contains the source delim chars verbatim and the corresponding mark is derived in `normalize.ts`'s `appendTransaction` by running `parseInline`. Flip side: those delim chars round-trip through the serializer raw (not `\*` escaped), because they *are* the md source.
+- **Method B is the only path** for inline features (em / strong / code / strike / link). The textblock's textContent contains the source delim chars verbatim; the corresponding mark is derived in `normalize.ts`'s `appendTransaction` by running `parseInline`. Flip side: those delim chars round-trip through the serializer raw (not `\*` escaped), because they *are* the md source.
 - **Lossless round-trip** is an invariant over nodes/marks/attrs only. `selection`, `history`, decorations, IME state are ephemeral.
 - See `~/.claude/projects/-Users-yanzhen-fiddle-typora-web/memory/project_state_model.md` for the original rationale.
 
@@ -27,14 +27,14 @@ view (DOM, built by PM EditorView)
 
 | File | Responsibility |
 |---|---|
-| `schema.ts` | PM schema. Merges `coreNodes`/`coreMarks` (doc/paragraph/text/hard_break/heading/blockquote/code_block/lists/link) with `collectNodes()`/`collectMarks()` from features. |
-| `parser.ts` | md → PM doc. `ParserState` is exported for features. Core block/inline tokens handled inline; feature tokens dispatched through `collectParserTokens()`. Registered `mdItPlugins` run on the singleton markdown-it instance. |
+| `schema.ts` | PM schema. Merges `coreNodes` (doc/paragraph/text/hard_break/heading/blockquote/code_block/lists) with `collectNodes()` / `collectMarks()` from features. No core marks — every mark belongs to a feature. |
+| `parser.ts` | md → PM doc. `ParserState` is exported for features (with `topMark(type)` so close-handlers can read attrs before closing). Core block / text / softbreak / hardbreak tokens handled inline; all other tokens dispatched through `collectParserTokens()`. Registered `mdItPlugins` run on the singleton markdown-it instance. |
 | `serializer.ts` | PM doc → md. Mark delimiters come from `collectMarkDelims()`; each inline feature's `extRanges(parent)` marks the chars that must be emitted raw (no backslash escape) so method-B delim chars survive round-trip. |
-| `inline-parse.ts` | Method-B inline parser. Utilities: `scanRuns`, `scanFixedDelim`, `markConsumed`, `markExtRanges`. Orchestration: `parseInline(text)` runs every inline feature's `scan` in ascending `priority`, sharing a `consumed` bitmap. |
-| `normalize.ts` | The authoritative "text → marks" step. `appendTransaction` walks every textblock, runs `parseInline`, and syncs em/strong/code/strike marks. Plugin state exposes `delim` ranges for decorations. |
-| `decorations.ts` | Two paths. **Widget** (legacy, currently only link): `deriveDecorations` expands active marks around the cursor into `DecoSpan`s, rendered as widget decos. **Inline** (method B): `getDelims(state)` gives delim ranges; each gets `Decoration.inline` with class `syntax-hint` (cursor in surrounding span) or `syntax-hidden` (outside). |
-| `cursor-render.ts` | `cursorRenderPlugin()` — paints the selection as a widget. Empty selection → `<span class="play-caret">`, non-empty → `selection-marker` on both ends. Dynamic `side`. |
-| `input-rules.ts` | Thin shell: `inputRules({ rules: collectInputRules(schema) })` + `spaceBreaksStoredMarks`. Under method B, em/strong/code/strike do NOT register input rules — normalize handles everything. Input rules remain the right tool for features like link that aren't delim-pair shaped. |
+| `inline-parse.ts` | Method-B inline parser. Utilities: `scanRuns`, `scanFixedDelim`, `markConsumed`, `markExtRanges`. Orchestration: `parseInline(text)` runs every inline feature's `scan` in ascending `priority`, sharing a `consumed` bitmap. `InlineSpan.attrs` lets attr-bearing marks (link's `{href, title}`) flow through normalize. |
+| `normalize.ts` | The authoritative "text → marks" step. `appendTransaction` walks every textblock, runs `parseInline`, and syncs em / strong / code / strike / link marks. Plugin state exposes `delim` ranges for decorations. Attr-bearing marks are always re-applied (bitmap diff can't detect href/title changes). |
+| `decorations.ts` | `syntaxHintsPlugin` — reads `getDelims(state)` from normalize and wraps each delim range in an inline `Decoration` with class `syntax-hint` (cursor in the surrounding span) or `syntax-hidden` (outside). Single path; the old widget path is gone. |
+| `cursor-render.ts` | `cursorRenderPlugin()` — paints the selection as a widget. Empty selection → `<span class="play-caret">`, non-empty → `selection-marker` on both ends. Since gray delims are now inline decorations on real chars, no dynamic `side` juggling. |
+| `input-rules.ts` | Thin shell: `inputRules({ rules: collectInputRules(schema) })` + `spaceBreaksStoredMarks`. Under method B, no inline feature registers input rules — normalize handles everything. Input rules remain available for block-shaped syntaxes that aren't delim-pair based. |
 | `editor.ts` | `defaultPlugins()`: history / keymap / input-rules / space-breaks / **normalizeInlinePlugin** / syntaxHints / cursorRender / baseKeymap. Same stack in live editor and test pretty. |
 | `events.ts` | `feedEvent(view, e)` — translates the event DSL into a transaction. View surface is minimal (`{state, dispatch, endOfTextblock, hasFocus}`). |
 | `test-utils.ts` | `setup(md)` / `apply(state, events)` / `pretty(state)` + `runFeatureCases(feature)` — the feature test driver. |
@@ -47,9 +47,10 @@ view (DOM, built by PM EditorView)
 |---|---|
 | `_types.ts` | `FeatureSpec`, `InlineFeatureSpec`, `Case`, `Checkpoint`, `TokenHandler`, `RenderCase`. |
 | `index.ts` | `ALL_FEATURES` registry plus `collectX()` helpers that core modules read. Adding a feature = one import + one array entry. |
-| `emphasis.ts` | em + strong. Merged because they share one `*` runs scanner (strong wins when both ends have ≥ 2 chars). |
+| `emphasis.ts` | em + strong (priority 2). Merged because they share one `*`/`_` runs scanner (strong wins when both ends have ≥ 2 chars). |
 | `code.ts` | inline code `` `x` `` (priority 0, wins over emphasis). |
 | `strike.ts` | strike `~~x~~` (priority 1). Enables markdown-it's strikethrough rule via `mdItPlugins`. |
+| `link.ts` | link `[text](href "title")` (priority 3). Uses a regex scanner (asymmetric close delim carrying `href`/`title` attrs) rather than delim-runs. Parser close-handler reads `href` via `ParserState.topMark` to emit `](url)` as raw text, so the doc's text has the full source. |
 
 ## Architectural invariants
 
@@ -63,13 +64,13 @@ view (DOM, built by PM EditorView)
 
 3. **One plugin stack.** `defaultPlugins()` is used by both the real view and the test pretty. Cursor, decorations, normalize and input rules all go through it.
 
-4. **Method-B reverses ownership for inline marks.** Text in the doc is the source (contains delim chars). `normalize.ts` is the single authority that turns text into mark structure. Do NOT manually add/remove em/strong/code/strike marks in feature code or other plugins — normalize will overwrite on the next transaction. If a new inline syntax needs different semantics, extend `parseInline` and normalize.
+4. **Method-B is the only path for inline marks.** Text in the doc is the source (contains delim chars); `normalize.ts` is the single authority that turns text into mark structure. Do NOT manually add/remove inline marks in feature code or other plugins — normalize will overwrite on the next transaction. If a new inline syntax needs different semantics, extend `parseInline` and normalize. Attr-bearing marks (link) carry their attrs through `InlineSpan.attrs`; normalize passes them to `markType.create(attrs)`.
 
 5. **Features are self-contained.** Every cross-cutting seam (schema / parser token / serializer delim / decoration class / input rule / inline scanner / test-pretty renderCase / cases) is declared inside the feature's file. Core modules only orchestrate via `collectX()`. This is what lets multiple agents develop features in parallel with minimal conflict surface.
 
 ## How to add a Markdown syntax
 
-Worked example: an inline-mark feature (the three existing ones emphasis / code / strike are the reference templates).
+Worked example: an inline-mark feature (the four existing ones emphasis / code / strike / link are the reference templates).
 
 1. **Create `src/features/<name>.ts`** exporting a `FeatureSpec`:
    - `marks` — PM mark spec (parseDOM/toDOM).
@@ -101,7 +102,7 @@ Worked example: an inline-mark feature (the three existing ones emphasis / code 
 3. **Register** in `src/features/index.ts`: one `import` + one entry in `ALL_FEATURES`.
 4. Run `npx vp test --run` — feature cases + roundtrip + parser tests all need to stay green.
 
-For marks that don't fit the delim-pair shape (link, image) the feature owns a widget-path decoration entry in `decorationDelims` and either an input rule or its own inline scanner. Block-level syntaxes additionally need `nodes` + serializer block handlers; that block-level surface hasn't been exercised yet.
+For marks that don't fit the delim-pair shape, see `link.ts` — its `scan` is a regex (close delim carries data), the open/close parser handlers emit full source text (`[` and `](href "title")`) while push/pop the mark, and its `extRanges` reaches past `contentTo` by the dynamic close-delim length. Block-level syntaxes additionally need `nodes` + serializer block handlers; that block-level surface hasn't been exercised yet.
 
 ## Test DSL
 
@@ -115,7 +116,7 @@ For marks that don't fit the delim-pair shape (link, image) the feature owns a w
 | `<c>…</c>` | inline code |
 | `<s>…</s>` | strike |
 | `<l:url>…</l>` | link |
-| `<g>*</g>`, `<g>**</g>`, `` <g>`</g> ``, `<g>~~</g>` | gray source delimiter shown when the cursor is inside the mark's surrounding span |
+| `<g>*</g>`, `<g>**</g>`, `` <g>`</g> ``, `<g>~~</g>`, `<g>[</g>` / `<g>](href)</g>` | gray source delimiter shown when the cursor is inside the mark's surrounding span |
 | `|` | empty-selection caret |
 | `[…]` | non-empty selection |
 | `# `, `- `, `1. `, `> `, ```\`\`\`lang\n…\n\`\`\` ```, `---`, `<br/>` | block / inline structure |
@@ -148,7 +149,7 @@ The canonical loop for a new inline feature:
    ```
    `runFeatureCases(feature)` expands each checkpoint into an independent `test()` — intermediate invariants stay covered.
 2. `npx vp test --run features/<name>` — confirm it's red.
-3. Fill in schema / parser / serializer / renderCases / inline scanner / decorationDelims.
+3. Fill in schema / parser / serializer / renderCases / inline scanner / extRanges.
 4. Run again; expect green. Same `events` array shows up in the harness as a preset automatically (via `collectCases`) — open `npm run dev` and eyeball step-by-step.
 
 ### Guiding principles
@@ -166,7 +167,7 @@ The canonical loop for a new inline feature:
 
 - **`navigator.platform`** — Node 22 ships with a `navigator` global whose platform is `"MacIntel"`, so PM normalises `Mod` to `Meta`. `events.ts` already branches on it.
 - **`tr.insertText` and storedMarks fallback** — when `storedMarks` is `null`/`[]`, PM falls back to `$from.marks()`; an inclusive mark will re-attach. To insert text with genuinely no marks, build the text node directly with `schema.text(text)` and use `tr.replaceWith`.
-- **Widget ordering** — multiple widgets at the same PM position render in ascending `side`. To keep the caret on the outside of a mark boundary, its widget uses a dynamic `side` (see `cursor-render.ts`).
+- **Widget ordering** — multiple widgets at the same PM position render in ascending `side`. Under method-B the gray delims are inline decorations on real chars so caret placement no longer fights widget side ordering — if you reintroduce widget delims you'll need to restore the dynamic-side dance in `cursor-render.ts`.
 - **PM widget class list** — PM appends `ProseMirror-widget` to every widget element, so test-pretty uses `classList.contains(...)`.
 - **Trailing `<br class="ProseMirror-trailingBreak">`** — PM inserts a placeholder into empty textblocks. test-pretty filters it out.
 - **Headless env startup** — happy-dom adds ~700ms to cold-start the test environment. Each test itself remains fast.
@@ -177,4 +178,4 @@ The canonical loop for a new inline feature:
 
 - **Nesting**: `parseInline` only recognises the outermost pair — `***both***` ends up as strong(em(…)) in md-it parse but normalize will rebuild it as just strong. Revisit when inline parse grows a nesting pass.
 - **Backtick-fence upgrade**: `` `` ` `` `` (double backtick fence with embedded single backtick) isn't recognised — `roundtrip.test` for this case is `.skip`ped. Requires variable-length code fence support in both parser-token emission and `inline-parse` code scanner.
-- **Link**: still on the legacy widget + input-rule path; not migrated to method B yet. See follow-up work.
+- **Link edge cases**: the link scanner's regex (`/\[([^\]]*?)\]\(([^\s)]+)(?:\s+"([^"]*)")?\)/g`) doesn't handle nested `]`, escaped `\]`, or href with spaces. Enough for the pilot; needs a hand-rolled scanner for full CommonMark coverage.
