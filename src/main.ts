@@ -17,8 +17,8 @@ import "./style.css";
 // Preset visualisation scripts. Feature scenarios come straight from each
 // feature's `cases` array — one data source for both assertions and the
 // harness, so they never drift. A handful of core/editor presets (typing,
-// cursor, history) are hand-written below since they're not tied to any
-// syntax feature.
+// cursor, history) are hand-written since they're not tied to any syntax
+// feature.
 // ─────────────────────────────────────────────────────────────────────────────
 
 type Script = {
@@ -54,167 +54,150 @@ const root = document.querySelector<HTMLDivElement>("#app")!;
 root.innerHTML = `
   <div class="harness">
     <div class="controls">
-      <button id="reset">Reset</button>
-      <button id="step">Step ▸</button>
-      <button id="play">Play ▶</button>
-      <label>speed
-        <input id="speed" type="range" min="100" max="1500" step="100" value="500" />
-        <span id="speed-val">500ms</span>
-      </label>
-    </div>
-    <div class="meta">
-      <div class="progress"><span id="progress"></span></div>
-      <div class="next">next: <code id="next-event">—</code></div>
-    </div>
-    <div class="pane pane-editor" id="editor"></div>
-    <details class="dump" open>
-      <summary>pretty() snapshot</summary>
-      <pre id="pretty-dump"></pre>
-    </details>
-    <details class="dump" open>
-      <summary>serialize() (md)</summary>
-      <pre id="md-dump"></pre>
-    </details>
-
-    <hr class="section-divider" />
-    <div class="controls">
       <strong>Free editor</strong>
       <button id="free-clear">Clear</button>
       <span class="hint">type anything; pretty / md update live</span>
     </div>
     <div class="pane pane-editor" id="free-editor"></div>
-    <details class="dump" open>
-      <summary>pretty() snapshot</summary>
-      <pre id="free-pretty-dump"></pre>
-    </details>
-    <details class="dump" open>
-      <summary>serialize() (md)</summary>
-      <pre id="free-md-dump"></pre>
-    </details>
+    <div class="free-dumps">
+      <details class="dump" open>
+        <summary>pretty() snapshot</summary>
+        <pre id="free-pretty-dump"></pre>
+      </details>
+      <details class="dump" open>
+        <summary>serialize() (md)</summary>
+        <pre id="free-md-dump"></pre>
+      </details>
+    </div>
 
     <hr class="section-divider" />
-    <div class="script-list-header">
+    <div class="case-list-header">
       <strong>Cases</strong>
-      <span class="hint">click to load; all scripts + core presets laid out flat</span>
+      <span class="hint">each card is independent — step/play multiple in parallel</span>
+      <label class="global-speed">
+        speed
+        <input id="global-speed" type="range" min="50" max="1500" step="50" value="250" />
+        <span id="global-speed-val">250ms</span>
+      </label>
     </div>
-    <div class="script-list" id="script-list"></div>
+    <div class="case-list" id="case-list"></div>
   </div>
 `;
 
-const $scriptList = document.getElementById("script-list") as HTMLDivElement;
-const $reset = document.getElementById("reset") as HTMLButtonElement;
-const $step = document.getElementById("step") as HTMLButtonElement;
-const $play = document.getElementById("play") as HTMLButtonElement;
-const $speed = document.getElementById("speed") as HTMLInputElement;
-const $speedVal = document.getElementById("speed-val") as HTMLSpanElement;
-const $progress = document.getElementById("progress") as HTMLSpanElement;
-const $nextEvent = document.getElementById("next-event") as HTMLElement;
-const $editor = document.getElementById("editor") as HTMLDivElement;
-const $prettyDump = document.getElementById("pretty-dump") as HTMLElement;
-const $mdDump = document.getElementById("md-dump") as HTMLElement;
+// ─────────────────────────────────────────────────────────────────────────────
+// Per-case card — a self-contained replay harness. One EditorView, its own
+// cursorIndex, its own controls. Cards don't coordinate; you can play several
+// at once and they tick independently.
+// ─────────────────────────────────────────────────────────────────────────────
 
-// Flat list of every case, stacked top-to-bottom. Click to load into the
-// scripted editor above. The currently-active row gets `.active`.
-const scriptButtons = new Map<string, HTMLButtonElement>();
-for (const s of SCRIPTS) {
-  const btn = document.createElement("button");
-  btn.type = "button";
-  btn.className = "script-item";
-  btn.dataset.id = s.id;
-  btn.textContent = s.label;
-  btn.addEventListener("click", () => selectScript(s.id));
-  $scriptList.append(btn);
-  scriptButtons.set(s.id, btn);
-}
+type Card = {
+  el: HTMLElement;
+  destroy(): void;
+};
 
-function selectScript(id: string): void {
-  setPlaying(false);
-  currentScript = SCRIPTS.find((s) => s.id === id) ?? SCRIPTS[0]!;
-  for (const [btnId, btn] of scriptButtons) {
-    btn.classList.toggle("active", btnId === currentScript.id);
+function createCard(script: Script, getSpeed: () => number): Card {
+  const el = document.createElement("div");
+  el.className = "case-card";
+  el.innerHTML = `
+    <div class="case-head">
+      <code class="case-label"></code>
+      <div class="case-controls">
+        <button data-act="reset" title="Reset">↺</button>
+        <button data-act="step" title="Step">▸</button>
+        <button data-act="play" title="Play">▶</button>
+        <span class="case-progress"></span>
+        <code class="case-next"></code>
+      </div>
+    </div>
+    <div class="case-body">
+      <div class="case-editor"></div>
+      <div class="case-dumps">
+        <pre class="case-pretty"></pre>
+        <pre class="case-md"></pre>
+      </div>
+    </div>
+  `;
+  (el.querySelector(".case-label") as HTMLElement).textContent = script.label;
+
+  const $editor = el.querySelector(".case-editor") as HTMLDivElement;
+  const $pretty = el.querySelector(".case-pretty") as HTMLElement;
+  const $md = el.querySelector(".case-md") as HTMLElement;
+  const $progress = el.querySelector(".case-progress") as HTMLElement;
+  const $next = el.querySelector(".case-next") as HTMLElement;
+  const $reset = el.querySelector('[data-act="reset"]') as HTMLButtonElement;
+  const $step = el.querySelector('[data-act="step"]') as HTMLButtonElement;
+  const $play = el.querySelector('[data-act="play"]') as HTMLButtonElement;
+
+  let view: EditorView | null = null;
+  let cursorIndex = 0;
+  let playTimer: number | null = null;
+
+  function mount(): void {
+    const doc: PMNode = script.seed
+      ? parse(script.seed)
+      : schema.nodes.doc.createAndFill()!;
+    const state = EditorState.create({ schema, doc, plugins: defaultPlugins() });
+    if (view) view.destroy();
+    view = new EditorView($editor, { state });
+    cursorIndex = 0;
+    redraw();
   }
-  mountFromScript(currentScript);
-}
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Editor lifecycle
-// ─────────────────────────────────────────────────────────────────────────────
-
-let view: EditorView | null = null;
-let currentScript: Script = SCRIPTS[0]!;
-let cursorIndex = 0; // index of the next event to dispatch
-let playTimer: number | null = null;
-
-function mountFromScript(script: Script): void {
-  const doc: PMNode = script.seed ? parse(script.seed) : schema.nodes.doc.createAndFill()!;
-  const state = EditorState.create({ schema, doc, plugins: defaultPlugins() });
-  if (view) view.destroy();
-  view = new EditorView($editor, { state });
-  cursorIndex = 0;
-  redraw();
-}
-
-function redraw(): void {
-  if (!view) return;
-  const done = cursorIndex >= currentScript.events.length;
-  $progress.textContent = `${cursorIndex} / ${currentScript.events.length}`;
-  $nextEvent.textContent = done ? "(end)" : currentScript.events[cursorIndex]!;
-  $prettyDump.textContent = pretty(view.state);
-  $mdDump.textContent = serialize(view.state.doc);
-  $step.disabled = done;
-  $play.disabled = done;
-}
-
-function stepOnce(): boolean {
-  if (!view) return false;
-  if (cursorIndex >= currentScript.events.length) return false;
-  const e = currentScript.events[cursorIndex]!;
-  feedEvent(view, e);
-  cursorIndex++;
-  redraw();
-  return cursorIndex < currentScript.events.length;
-}
-
-function setPlaying(on: boolean): void {
-  if (playTimer !== null) {
-    clearInterval(playTimer);
-    playTimer = null;
+  function redraw(): void {
+    if (!view) return;
+    const done = cursorIndex >= script.events.length;
+    $progress.textContent = `${cursorIndex}/${script.events.length}`;
+    $next.textContent = done ? "—" : String(script.events[cursorIndex]!);
+    $pretty.textContent = pretty(view.state);
+    $md.textContent = serialize(view.state.doc);
+    $step.disabled = done;
+    $play.disabled = done;
+    el.classList.toggle("done", done);
   }
-  $play.textContent = on ? "Pause ❚❚" : "Play ▶";
-  if (on) {
-    const speed = Number($speed.value);
-    playTimer = window.setInterval(() => {
-      const hasMore = stepOnce();
-      if (!hasMore) setPlaying(false);
-    }, speed);
+
+  function stepOnce(): boolean {
+    if (!view) return false;
+    if (cursorIndex >= script.events.length) return false;
+    feedEvent(view, script.events[cursorIndex]!);
+    cursorIndex++;
+    redraw();
+    return cursorIndex < script.events.length;
   }
-}
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Control wiring
-// ─────────────────────────────────────────────────────────────────────────────
+  function setPlaying(on: boolean): void {
+    if (playTimer !== null) {
+      clearInterval(playTimer);
+      playTimer = null;
+    }
+    $play.textContent = on ? "❚❚" : "▶";
+    if (on) {
+      playTimer = window.setInterval(() => {
+        const hasMore = stepOnce();
+        if (!hasMore) setPlaying(false);
+      }, getSpeed());
+    }
+  }
 
-$reset.addEventListener("click", () => {
-  setPlaying(false);
-  mountFromScript(currentScript);
-});
-$step.addEventListener("click", () => {
-  setPlaying(false);
-  stepOnce();
-});
-$play.addEventListener("click", () => {
-  setPlaying(playTimer === null);
-});
-$speed.addEventListener("input", () => {
-  $speedVal.textContent = `${$speed.value}ms`;
-  if (playTimer !== null) {
+  $reset.addEventListener("click", () => {
     setPlaying(false);
-    setPlaying(true);
-  }
-});
+    mount();
+  });
+  $step.addEventListener("click", () => {
+    setPlaying(false);
+    stepOnce();
+  });
+  $play.addEventListener("click", () => setPlaying(playTimer === null));
 
-// Initial mount — also marks the first row active.
-selectScript(currentScript.id);
+  mount();
+
+  return {
+    el,
+    destroy(): void {
+      setPlaying(false);
+      if (view) view.destroy();
+    },
+  };
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Free editor — no script, direct keyboard input; useful for comparing
@@ -254,3 +237,22 @@ $freeClear.addEventListener("click", () => {
   $freeEditor.innerHTML = "";
   freeView = mountFreeEditor();
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mount every case as its own card.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const $caseList = document.getElementById("case-list") as HTMLDivElement;
+const $globalSpeed = document.getElementById("global-speed") as HTMLInputElement;
+const $globalSpeedVal = document.getElementById("global-speed-val") as HTMLSpanElement;
+
+const getSpeed = (): number => Number($globalSpeed.value);
+
+$globalSpeed.addEventListener("input", () => {
+  $globalSpeedVal.textContent = `${$globalSpeed.value}ms`;
+});
+
+for (const s of SCRIPTS) {
+  const card = createCard(s, getSpeed);
+  $caseList.append(card.el);
+}

@@ -86,18 +86,69 @@ html, body { margin: 0; padding: 0; font: 16px/1.6 -apple-system, system-ui, san
 .section-divider { border: none; border-top: 1px dashed #d0d0d0; margin: 24px 0 16px; }
 .hint { color: #888; font-size: 12px; }
 
-/* ── Flat case list (scripted presets) ─────────────────────────────── */
-.script-list-header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 8px; }
-.script-list {
-  display: flex; flex-direction: column; gap: 2px;
-  border: 1px solid #e3e3e3; border-radius: 8px; padding: 6px;
-  background: #fff;
+/* ── Free editor dumps side-by-side ──────────────────────────────────── */
+.free-dumps { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+/* ── Per-case cards (tiled, independent) ─────────────────────────────── */
+.case-list-header {
+  display: flex; align-items: baseline; gap: 12px; margin-bottom: 8px;
+  flex-wrap: wrap;
 }
-.script-item {
-  text-align: left; padding: 6px 10px; border: none; border-radius: 4px;
-  background: transparent; cursor: pointer;
+.global-speed {
+  margin-left: auto; display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; color: #666;
+}
+
+.case-list { display: flex; flex-direction: column; gap: 10px; }
+
+.case-card {
+  border: 1px solid #e3e3e3; border-radius: 8px; background: #fff;
+  padding: 8px 10px;
+}
+.case-card.done { opacity: 0.7; }
+.case-card.done .case-progress { color: #2a7a2a; }
+
+.case-head {
+  display: flex; align-items: center; gap: 10px;
+  flex-wrap: wrap; margin-bottom: 6px;
+}
+.case-label {
   font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
-  color: #444;
+  color: #1a1a1a; background: transparent;
+  flex: 1 1 auto;
 }
-.script-item:hover { background: #f0f0f5; }
-.script-item.active { background: #e8ecff; color: #1a1a80; font-weight: 600; }
+.case-controls { display: inline-flex; align-items: center; gap: 4px; }
+.case-controls button {
+  padding: 2px 8px; border: 1px solid #d0d0d0; border-radius: 4px;
+  background: #fafafa; cursor: pointer; font-size: 12px;
+  min-width: 28px;
+}
+.case-controls button:hover:not(:disabled) { background: #eceff8; }
+.case-controls button:disabled { opacity: 0.4; cursor: default; }
+.case-progress { font-size: 11px; color: #666; min-width: 40px; text-align: right; }
+.case-next {
+  font-size: 11px; color: #888; min-width: 60px;
+  background: #f6f8fa; padding: 1px 6px; border-radius: 3px;
+}
+
+.case-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+}
+.case-editor {
+  border: 1px solid #ececec; border-radius: 6px;
+  padding: 4px 8px; min-height: 40px;
+  background: #fcfcfc;
+}
+.case-editor .ProseMirror { min-height: 24px; outline: none; font-size: 13px; }
+.case-editor .ProseMirror p { margin: 2px 0; }
+.case-dumps { display: grid; grid-template-rows: 1fr 1fr; gap: 6px; min-width: 0; }
+.case-pretty, .case-md {
+  margin: 0; padding: 4px 8px; background: #f6f8fa; border-radius: 6px;
+  font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  overflow-x: auto; white-space: pre;
+  min-height: 18px;
+}
+.case-pretty { color: #333; }
+.case-md { color: #555; }
