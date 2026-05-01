@@ -43,6 +43,14 @@ function renderNode(n: Node): string {
     if (list.contains("syntax-hidden")) return ""; // delim char present in text, visually hidden
     if (list.contains("play-caret")) return "|";
     if (list.contains("selection-marker")) return el.textContent ?? "";
+    if (list.contains("image-icon"))
+      return list.contains("broken") ? "<img-icon broken/>" : "<img-icon/>";
+    if (list.contains("file-input")) return "<file-input/>";
+  }
+  if (tag === "img" && list.contains("image-render")) {
+    const src = el.getAttribute("src") ?? "";
+    const alt = el.getAttribute("alt") ?? "";
+    return `<img:${src}>${alt}</img>`;
   }
 
   // Trailing break PM injects for empty textblocks — not part of the doc content.

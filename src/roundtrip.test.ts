@@ -51,6 +51,10 @@ describe("round-trip: inline marks", () => {
   test("inline code with backticks inside", () => roundTripStable("use `` ` `` as fence"));
   test("link without title", () => roundTripStable("see [site](https://example.com)"));
   test("link with title", () => roundTripStable('see [site](https://example.com "home")'));
+  test("image", () => roundTripStable("![alt](https://example.com/x.png)"));
+  test("image with title", () =>
+    roundTripStable('![alt](https://example.com/x.png "caption")'));
+  test("image empty alt", () => roundTripStable("![](https://example.com/x.png)"));
   test("hard break", () => roundTripStable("line a  \nline b"));
   test("soft break (newline in paragraph)", () => roundTripStable("line a\nline b"));
 });

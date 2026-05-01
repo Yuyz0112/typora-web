@@ -76,6 +76,42 @@ html, body { margin: 0; padding: 0; font: 16px/1.6 -apple-system, system-ui, san
 }
 .ProseMirror-focused .selection-marker { display: none; }
 
+/* ── Image edit-mode UI ────────────────────────────────────────────── */
+.ProseMirror .image-icon {
+  display: inline-block;
+  user-select: none;
+}
+.ProseMirror .image-icon::before {
+  content: "🖼️";
+  font-size: 0.9em;
+  margin-right: 2px;
+}
+.ProseMirror .image-icon.broken::before {
+  content: "🖼️";
+  filter: grayscale(1) brightness(0.7);
+  opacity: 0.6;
+}
+.ProseMirror .image-icon.broken::after {
+  content: "⚠";
+  color: #c43;
+  font-size: 0.8em;
+  margin-right: 2px;
+}
+.ProseMirror .file-input {
+  display: inline-block;
+  cursor: pointer;
+  user-select: none;
+  font-size: 0.9em;
+  margin: 0 2px;
+  opacity: 0.6;
+}
+.ProseMirror .file-input:hover { opacity: 1; }
+.ProseMirror img.image-render {
+  display: block;
+  max-width: 100%;
+  margin: 4px 0;
+}
+
 /* Heading draft: content is bold; font-size stays at paragraph size.
  * `.heading-draft-N` is applied to the <p> via Decoration.node while the
  * cursor is inside a matching paragraph. The `# ` prefix itself wears

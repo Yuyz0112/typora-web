@@ -45,6 +45,21 @@ export type InlineSpan = {
     nodeName: string;
     attrs?: Record<string, string>;
   }>;
+  // Widget decorations (DOM nodes injected at a specific position, not
+  // wrapping any source chars). `when` toggles them based on the cursor's
+  // position relative to the span:
+  //   - "inside":  cursor in [spanFrom, spanTo]
+  //   - "outside": cursor not in [spanFrom, spanTo]
+  //   - "always":  always rendered
+  // Used by image to swap a rendered <img> (cursor outside) for an icon +
+  // optional file input (cursor inside, source-as-text editing UI).
+  widgetDecorations?: Array<{
+    pos: number;
+    when: "inside" | "outside" | "always";
+    kind: string;
+    attrs?: Record<string, string>;
+    side?: number;
+  }>;
 };
 
 export type Run = { pos: number; len: number; canOpen: boolean; canClose: boolean };

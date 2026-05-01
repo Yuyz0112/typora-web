@@ -13,6 +13,7 @@ import { emphasis } from "./emphasis.ts";
 import { fencedCode } from "./fenced-code.ts";
 import { heading } from "./heading.ts";
 import { hr } from "./hr.ts";
+import { image } from "./image.ts";
 import { link } from "./link.ts";
 import { list } from "./list.ts";
 import { strike } from "./strike.ts";
@@ -22,6 +23,7 @@ export const ALL_FEATURES: FeatureSpec[] = [
   code,
   strike,
   link,
+  image,
   hr,
   blockquote,
   heading,

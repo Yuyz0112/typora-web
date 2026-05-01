@@ -36,9 +36,20 @@ export type ExtraDecoration = {
   attrs?: Record<string, string>;
 };
 
+export type WidgetDecoration = {
+  pos: number;
+  spanFrom: number;
+  spanTo: number;
+  when: "inside" | "outside" | "always";
+  kind: string;
+  attrs?: Record<string, string>;
+  side?: number;
+};
+
 export type NormalizeState = {
   delims: DelimRange[];
   extras: ExtraDecoration[];
+  widgets: WidgetDecoration[];
 };
 
 type BlockPlan = { blockStart: number; spans: InlineSpan[] };
@@ -48,10 +59,12 @@ function computePlan(doc: PMNode): {
   blocks: Array<{ blockPos: number; plan: BlockPlan }>;
   delims: DelimRange[];
   extras: ExtraDecoration[];
+  widgets: WidgetDecoration[];
 } {
   const blocks: Array<{ blockPos: number; plan: BlockPlan }> = [];
   const delims: DelimRange[] = [];
   const extras: ExtraDecoration[] = [];
+  const widgets: WidgetDecoration[] = [];
   doc.descendants((node, pos) => {
     if (!node.isTextblock) return true;
     const text = node.textContent;
@@ -86,10 +99,23 @@ function computePlan(doc: PMNode): {
           });
         }
       }
+      if (s.widgetDecorations) {
+        for (const w of s.widgetDecorations) {
+          widgets.push({
+            pos: blockStart + w.pos,
+            spanFrom,
+            spanTo,
+            when: w.when,
+            kind: w.kind,
+            attrs: w.attrs,
+            side: w.side,
+          });
+        }
+      }
     }
     return false; // don't descend into inline children
   });
-  return { blocks, delims, extras };
+  return { blocks, delims, extras, widgets };
 }
 
 const normalizeKey = new PluginKey<NormalizeState>("normalize-inline");
@@ -101,11 +127,11 @@ export function normalizeInlinePlugin(): Plugin<NormalizeState> {
     state: {
       init: (_, state) => {
         const p = computePlan(state.doc);
-        return { delims: p.delims, extras: p.extras };
+        return { delims: p.delims, extras: p.extras, widgets: p.widgets };
       },
       apply: (_tr, _prev, _oldState, newState) => {
         const p = computePlan(newState.doc);
-        return { delims: p.delims, extras: p.extras };
+        return { delims: p.delims, extras: p.extras, widgets: p.widgets };
       },
     },
 
@@ -128,25 +154,42 @@ export function normalizeInlinePlugin(): Plugin<NormalizeState> {
           const markType = schema.marks[name];
           if (!markType) continue;
 
-          const target = new Uint8Array(size);
+          // For attr-bearing marks (link, image) coverage equality isn't
+          // enough — attrs (href / src / title) can change while coverage
+          // stays the same. Build a per-position mark map and compare with
+          // mark.eq() so we don't keep re-emitting identical removeMark+
+          // addMark steps every transaction (PM would re-fire
+          // appendTransaction on those steps and we'd loop).
+          const targetMarks = new Array<import("prosemirror-model").Mark | null>(
+            size,
+          ).fill(null);
           for (const s of spans) {
             if (s.type !== name) continue;
-            for (let i = s.from; i < s.to; i++) target[i] = 1;
+            const m = markType.create(s.attrs);
+            for (let i = s.from; i < s.to; i++) targetMarks[i] = m;
           }
-
-          const current = new Uint8Array(size);
-          let off = 0;
-          blockNode.content.forEach((child) => {
-            const has = child.marks.some((m) => m.type === markType);
-            if (has) for (let i = 0; i < child.nodeSize; i++) current[off + i] = 1;
-            off += child.nodeSize;
-          });
-
-          // For attr-bearing marks (link) we can't represent "same mark"
-          // with a uint8 bitmap — always re-apply so attr changes (href,
-          // title) propagate even when coverage is unchanged.
-          const hasAttrs = spans.some((s) => s.type === name && s.attrs);
-          if (!hasAttrs && arraysEqual(target, current)) continue;
+          const currentMarks = new Array<import("prosemirror-model").Mark | null>(
+            size,
+          ).fill(null);
+          {
+            let cOff = 0;
+            blockNode.content.forEach((child) => {
+              const m = child.marks.find((mk) => mk.type === markType) ?? null;
+              for (let i = 0; i < child.nodeSize; i++) currentMarks[cOff + i] = m;
+              cOff += child.nodeSize;
+            });
+          }
+          let same = true;
+          for (let i = 0; i < size; i++) {
+            const a = targetMarks[i];
+            const b = currentMarks[i];
+            if (a === b) continue;
+            if (!a || !b || !a.eq(b)) {
+              same = false;
+              break;
+            }
+          }
+          if (same) continue;
 
           tr.removeMark(blockStart, blockEnd, markType);
           for (const s of spans) {
@@ -162,16 +205,14 @@ export function normalizeInlinePlugin(): Plugin<NormalizeState> {
   });
 }
 
-function arraysEqual(a: Uint8Array, b: Uint8Array): boolean {
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
-  return true;
-}
-
 export function getDelims(state: EditorState): DelimRange[] {
   return normalizeKey.getState(state)?.delims ?? [];
 }
 
 export function getExtras(state: EditorState): ExtraDecoration[] {
   return normalizeKey.getState(state)?.extras ?? [];
+}
+
+export function getWidgets(state: EditorState): WidgetDecoration[] {
+  return normalizeKey.getState(state)?.widgets ?? [];
 }
