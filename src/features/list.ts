@@ -246,9 +246,7 @@ export const list: FeatureSpec = {
       events: ["-", " "],
       checkpoints: [
         { at: 1, expect: "-|" },
-        // wrappingInputRule fires → `<ul>` wrapper makes the list state
-        // unambiguous (would otherwise look like a paragraph with `- `).
-        { at: 2, expect: "<ul>- |</ul>" },
+        { at: 2, expect: "<ul><li>|</li></ul>" },
       ],
     },
 
@@ -270,8 +268,8 @@ export const list: FeatureSpec = {
       seed: "",
       events: ["-", " ", "a"],
       checkpoints: [
-        { at: 2, expect: "<ul>- |</ul>" },
-        { at: 3, expect: "<ul>- a|</ul>" },
+        { at: 2, expect: "<ul><li>|</li></ul>" },
+        { at: 3, expect: "<ul><li>a|</li></ul>" },
       ],
     },
 
@@ -282,9 +280,9 @@ export const list: FeatureSpec = {
       seed: "",
       events: ["-", " ", "a", "<Enter>", "b"],
       checkpoints: [
-        { at: 3, expect: "<ul>- a|</ul>" },
-        { at: 4, expect: "<ul>- a\n- |</ul>" },
-        { at: 5, expect: "<ul>- a\n- b|</ul>" },
+        { at: 3, expect: "<ul><li>a|</li></ul>" },
+        { at: 4, expect: "<ul><li>a</li><li>|</li></ul>" },
+        { at: 5, expect: "<ul><li>a</li><li>b|</li></ul>" },
       ],
     },
 
@@ -295,10 +293,10 @@ export const list: FeatureSpec = {
       seed: "",
       events: ["-", " ", "a", "<Enter>", "<Enter>"],
       checkpoints: [
-        { at: 4, expect: "<ul>- a\n- |</ul>" },
-        // empty item lifted out → list now has one item, then a sibling
-        // empty paragraph (block children separated by "\n").
-        { at: 5, expect: "<ul>- a</ul>\n|" },
+        { at: 4, expect: "<ul><li>a</li><li>|</li></ul>" },
+        // empty item lifted out → one-item list, then sibling empty
+        // paragraph (block children separated by "\n").
+        { at: 5, expect: "<ul><li>a</li></ul>\n|" },
       ],
     },
 
@@ -309,10 +307,9 @@ export const list: FeatureSpec = {
       seed: "- a",
       events: ["<Enter>", "<Tab>", "b"],
       checkpoints: [
-        { at: 1, expect: "<ul>- a\n- |</ul>" },
-        // sink → nested ul inside first li. Both wrappers visible.
-        { at: 2, expect: "<ul>- a\n  <ul>- |</ul></ul>" },
-        { at: 3, expect: "<ul>- a\n  <ul>- b|</ul></ul>" },
+        { at: 1, expect: "<ul><li>a</li><li>|</li></ul>" },
+        { at: 2, expect: "<ul><li>a<ul><li>|</li></ul></li></ul>" },
+        { at: 3, expect: "<ul><li>a<ul><li>b|</li></ul></li></ul>" },
       ],
     },
 
@@ -323,14 +320,14 @@ export const list: FeatureSpec = {
       seed: "- a\n  - b",
       events: ["<Enter>", "<Enter>", "<Enter>", "<Enter>"],
       checkpoints: [
-        { at: 1, expect: "<ul>- a\n  <ul>- b\n  - |</ul></ul>" },
-        // bulletless intermediate: nested ul closes, then a <li-tail>
-        // sits inside the outer li.
-        { at: 2, expect: "<ul>- a\n  <ul>- b</ul>\n  <li-tail>|</li-tail></ul>" },
+        { at: 1, expect: "<ul><li>a<ul><li>b</li><li>|</li></ul></li></ul>" },
+        // bulletless intermediate: nested ul closes, <li-tail> sits inside
+        // the outer li.
+        { at: 2, expect: "<ul><li>a<ul><li>b</li></ul><li-tail>|</li-tail></li></ul>" },
         // promote to outer sibling.
-        { at: 3, expect: "<ul>- a\n  <ul>- b</ul>\n- |</ul>" },
+        { at: 3, expect: "<ul><li>a<ul><li>b</li></ul></li><li>|</li></ul>" },
         // exit list entirely.
-        { at: 4, expect: "<ul>- a\n  <ul>- b</ul></ul>\n|" },
+        { at: 4, expect: "<ul><li>a<ul><li>b</li></ul></li></ul>\n|" },
       ],
     },
 

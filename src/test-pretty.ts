@@ -96,24 +96,15 @@ function renderNode(n: Node): string {
     }
     case "ul":
     case "ol": {
-      // Wrap with <ul>/<ol> so a list item is distinguishable from a
-      // paragraph that just happens to start with `- ` / `1. ` (the same
-      // ambiguity blockquote solves with `<bq>`). Nested lists keep their
-      // own wrappers so nesting depth is explicit too.
+      // Explicit <ul>/<ol> + <li> nesting: list state is unambiguous (a
+      // paragraph starting with `- ` would otherwise look identical to a
+      // one-item bullet list), and the bullet/number is implied by the
+      // tag rather than emitted as text. `<ol s=N>` carries non-default
+      // start.
       const isOrdered = tag === "ol";
       const startAttr = el.getAttribute("start");
       const start = startAttr ? Number(startAttr) : 1;
-      const inner = Array.from(el.children)
-        .map((li, i) => {
-          const liContent = renderNode(li);
-          const prefix = isOrdered ? `${start + i}. ` : "- ";
-          const indent = " ".repeat(prefix.length);
-          return liContent
-            .split("\n")
-            .map((line, idx) => (idx === 0 ? prefix : indent) + line)
-            .join("\n");
-        })
-        .join("\n");
+      const inner = Array.from(el.children).map(renderNode).join("");
       const open = isOrdered
         ? start === 1
           ? "<ol>"
@@ -123,21 +114,20 @@ function renderNode(n: Node): string {
       return `${open}${inner}${close}`;
     }
     case "li": {
-      // First block child carries the bullet (parent ul/ol prepends `- `).
-      // Non-first <p> children are "bulletless trailing paragraphs" — the
-      // staircase-exit intermediate state (outer li with nested ul + a
-      // trailing p) and CommonMark loose list continuations both look like
-      // this. Wrap those in <li-tail> so pretty stays unambiguous even
-      // before the reader sees the surrounding indentation.
-      return Array.from(el.children)
+      // First block child is the item content. Non-first <p> children
+      // are "bulletless trailing paragraphs" (staircase-exit intermediate
+      // or CommonMark loose-list continuation) — wrap them in <li-tail>.
+      // Nested ul/ol keep their own wrappers.
+      const inner = Array.from(el.children)
         .map((child, i) => {
           const content = renderNode(child);
           if (i === 0) return content;
           return child.tagName.toLowerCase() === "p"
             ? `<li-tail>${content}</li-tail>`
-            : content; // nested ul/ol keep their own prefix handling
+            : content;
         })
-        .join("\n");
+        .join("");
+      return `<li>${inner}</li>`;
     }
     default:
       return children;
