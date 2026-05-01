@@ -46,6 +46,47 @@ function scanOneDelim(text: string, delim: string, consumed: Uint8Array, out: In
       const open = runs[a]!;
       const close = run;
 
+      // ***x*** form: both runs ≥ 3 chars → emit em outer + strong inner
+      // in one shot. Matches CommonMark example 466 (`***foo***` →
+      // `<em><strong>foo</strong></em>`). Only this exact configuration
+      // triggers nesting; other run-length combos keep the single-pair
+      // behaviour to avoid drifting into harder rule-of-three territory.
+      if (open.len >= 3 && close.len >= 3) {
+        const emOpenFrom = open.pos;
+        const emOpenTo = emOpenFrom + 1;
+        const emCloseTo = close.pos + close.len;
+        const emCloseFrom = emCloseTo - 1;
+        const strongOpenFrom = emOpenTo;
+        const strongOpenTo = strongOpenFrom + 2;
+        const strongCloseTo = emCloseFrom;
+        const strongCloseFrom = strongCloseTo - 2;
+        const innerFrom = strongOpenTo;
+        const innerTo = strongCloseFrom;
+        if (innerFrom >= innerTo) continue;
+        if (/\s/.test(text[innerFrom]!) || /\s/.test(text[innerTo - 1]!)) continue;
+
+        markConsumed(consumed, emOpenFrom, emCloseTo);
+        out.push({
+          type: "em",
+          from: emOpenTo,
+          to: emCloseFrom,
+          openFrom: emOpenFrom,
+          openTo: emOpenTo,
+          closeFrom: emCloseFrom,
+          closeTo: emCloseTo,
+        });
+        out.push({
+          type: "strong",
+          from: innerFrom,
+          to: innerTo,
+          openFrom: strongOpenFrom,
+          openTo: strongOpenTo,
+          closeFrom: strongCloseFrom,
+          closeTo: strongCloseTo,
+        });
+        continue;
+      }
+
       const wantLen = Math.min(open.len, close.len) >= 2 ? 2 : 1;
       const openFrom = open.pos;
       const openTo = openFrom + wantLen;
@@ -202,6 +243,41 @@ export const emphasis: FeatureSpec = {
       seed: "",
       events: ["f", "o", "o", "_", "b", "a", "r", "_", "b", "a", "z"],
       checkpoints: [{ at: 11, expect: "foo_bar_baz|" }],
+    },
+    {
+      id: "triple-asterisks-stable",
+      label: "***1*** stable — em wrapping strong",
+      seed: "***1*** ",
+      events: [],
+      checkpoints: [{ at: 0, expect: "<i><b>1</b></i> |" }],
+    },
+    {
+      id: "triple-asterisks-typing",
+      label: "***1*** typing — em wraps strong when both 3-char delims close",
+      seed: "",
+      events: ["*", "*", "*", "1", "*", "*", "*", " "],
+      checkpoints: [
+        { at: 4, expect: "***1|" },
+        // step 5: open run len 3, close len 1 → em on `**1` (the two
+        // unmatched `*` chars become content, same shape as the
+        // `**1*` step in `double-asterisks`).
+        { at: 5, expect: "<g>*</g><i>**1</i><g>*</g>|" },
+        // step 6: open 3, close 2 → strong on `*1`.
+        { at: 6, expect: "<g>**</g><b>*1</b><g>**</g>|" },
+        // step 7: both runs len 3 → em outer wraps strong inner.
+        // cursor at pos 7 sits at em's spanTo (inside em) but past
+        // strong's spanTo (outside strong) → em delims gray, strong
+        // delims hidden.
+        { at: 7, expect: "<g>*</g><i><b>1</b></i><g>*</g>|" },
+        { at: 8, expect: "<i><b>1</b></i> |" },
+      ],
+    },
+    {
+      id: "triple-underscores-stable",
+      label: "___1___ stable — em wrapping strong (underscore variant)",
+      seed: "___1___ ",
+      events: [],
+      checkpoints: [{ at: 0, expect: "<i><b>1</b></i> |" }],
     },
   ],
 };
