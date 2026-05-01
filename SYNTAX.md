@@ -42,7 +42,7 @@ Status legend:
 | link `[text](url)` | 🟡 | `link` | edge cases: nested `]`, `\]` escape, href with spaces |
 | link with title `[t](u "title")` | ✅ | `link` | |
 | empty-text link `[](url)` | ✅ | `link` | href rendered as link-styled text |
-| image `![alt](src)` | ✅ | `image` | cursor outside → `<img>` widget; cursor inside → source + icon + (file-input when src empty) |
+| image `![alt](src)` | ✅ | `image` | loaded src → `<img>` always rendered as block under source; empty/broken → edit mode with file-input. async load probe; broken icon variant. round-trip stable. |
 | autolink `<https://x.com>` | ⏸️ | — | deferred per pilot scope |
 | reference-style link `[t][id]` | ❌ | — | |
 | inline HTML | ❌ | — | |
