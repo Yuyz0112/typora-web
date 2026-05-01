@@ -18,9 +18,17 @@ function buildDecorationSet(state: EditorState): DecorationSet {
   const decos: Decoration[] = [];
   const cursor = state.selection.empty ? state.selection.from : null;
   for (const d of getDelims(state)) {
-    const visible =
-      d.forceVisible ||
-      (cursor !== null && cursor >= d.spanFrom && cursor <= d.spanTo);
+    const cursorInside =
+      cursor !== null && cursor >= d.spanFrom && cursor <= d.spanTo;
+    if (d.softInside) {
+      // Soft range: hidden when cursor outside, plain (no decoration)
+      // when cursor inside so the chars render as ordinary text.
+      if (!cursorInside) {
+        decos.push(Decoration.inline(d.from, d.to, { class: "syntax-hidden" }));
+      }
+      continue;
+    }
+    const visible = d.forceVisible || cursorInside;
     const cls = visible ? "syntax-hint" : "syntax-hidden";
     decos.push(Decoration.inline(d.from, d.to, { class: cls }));
   }

@@ -23,6 +23,10 @@ export type DelimRange = {
   // of cursor position. Used for links whose visible content is empty —
   // hiding the delim would make the link disappear entirely.
   forceVisible?: boolean;
+  // When true, the range is hidden when the cursor is outside the span
+  // and rendered as plain text (no decoration) when the cursor is inside.
+  // Used for soft whitespace ranges inside a code fence.
+  softInside?: boolean;
 };
 
 export type ExtraDecoration = {
@@ -65,6 +69,7 @@ function computePlan(doc: PMNode): {
             spanFrom,
             spanTo,
             forceVisible: dr.forceVisible,
+            softInside: dr.softInside,
           });
         }
       } else {

@@ -25,7 +25,17 @@ export type InlineSpan = {
   // When provided, overrides the default open/close delim emission. Each
   // entry becomes a DelimRange. Used by empty-content links where the
   // open/close split alone wouldn't capture the right rendering.
-  delimRanges?: Array<{ from: number; to: number; forceVisible?: boolean }>;
+  delimRanges?: Array<{
+    from: number;
+    to: number;
+    forceVisible?: boolean;
+    // softInside: when true, the range is hidden when the cursor is
+    // outside the span and rendered as plain text (no class) when the
+    // cursor is inside. Used for bare leading/trailing whitespace inside
+    // a code fence — it should disappear in the stable view but remain
+    // visible (and editable) while the user has the fence open.
+    softInside?: boolean;
+  }>;
   // Extra inline decorations (non-delim) the feature wants drawn over its
   // span. Used to give an empty-text link's href a visible link-styled
   // wrapper without adding a stray link mark to the doc.

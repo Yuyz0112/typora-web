@@ -48,10 +48,7 @@ describe("round-trip: inline marks", () => {
   test("strong and em adjacent", () => roundTripStable("**bold** and *italic*"));
   test("nested strong+em", () => roundTripStable("***both***"));
   test("inline code", () => roundTripStable("run `npm test`"));
-  // Backtick-fence upgrade (``…`…``) isn't covered by the Typora-pilot
-  // parser yet — inline-parse recognises only single-backtick pairs.
-  // Revisit when method-B expands to variable-length code fences.
-  test.skip("inline code with backticks inside", () => roundTripStable("use `` ` `` as fence"));
+  test("inline code with backticks inside", () => roundTripStable("use `` ` `` as fence"));
   test("link without title", () => roundTripStable("see [site](https://example.com)"));
   test("link with title", () => roundTripStable('see [site](https://example.com "home")'));
   test("hard break", () => roundTripStable("line a  \nline b"));
