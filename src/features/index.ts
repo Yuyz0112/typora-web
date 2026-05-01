@@ -6,6 +6,7 @@ import type { Command, Plugin } from "prosemirror-state";
 import type { Schema } from "prosemirror-model";
 
 import type { Case, FeatureSpec, InlineFeatureSpec } from "./_types.ts";
+import { autoPair } from "./auto-pair.ts";
 import { blockquote } from "./blockquote.ts";
 import { code } from "./code.ts";
 import { emphasis } from "./emphasis.ts";
@@ -16,10 +17,6 @@ import { link } from "./link.ts";
 import { list } from "./list.ts";
 import { strike } from "./strike.ts";
 
-// heading / list / fencedCode are cases-only stubs for now — registered
-// here so their scripts surface in the harness (collectCases), even
-// though the feature plugins haven't landed yet. Their tests stay red
-// until implementation. hr and blockquote are fully implemented.
 export const ALL_FEATURES: FeatureSpec[] = [
   emphasis,
   code,
@@ -30,6 +27,7 @@ export const ALL_FEATURES: FeatureSpec[] = [
   heading,
   list,
   fencedCode,
+  autoPair,
 ];
 
 // Thin helpers that collect a named table from every feature. They are

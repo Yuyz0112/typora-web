@@ -19,9 +19,23 @@ export type DelimRange = {
   // Used by decoration/display to decide whether the cursor is "inside".
   spanFrom: number;
   spanTo: number;
+  // When true, decorations renders this delim as `syntax-hint` regardless
+  // of cursor position. Used for links whose visible content is empty —
+  // hiding the delim would make the link disappear entirely.
+  forceVisible?: boolean;
 };
 
-export type NormalizeState = { delims: DelimRange[] };
+export type ExtraDecoration = {
+  from: number;
+  to: number;
+  nodeName: string;
+  attrs?: Record<string, string>;
+};
+
+export type NormalizeState = {
+  delims: DelimRange[];
+  extras: ExtraDecoration[];
+};
 
 type BlockPlan = { blockStart: number; spans: InlineSpan[] };
 
@@ -29,9 +43,11 @@ type BlockPlan = { blockStart: number; spans: InlineSpan[] };
 function computePlan(doc: PMNode): {
   blocks: Array<{ blockPos: number; plan: BlockPlan }>;
   delims: DelimRange[];
+  extras: ExtraDecoration[];
 } {
   const blocks: Array<{ blockPos: number; plan: BlockPlan }> = [];
   const delims: DelimRange[] = [];
+  const extras: ExtraDecoration[] = [];
   doc.descendants((node, pos) => {
     if (!node.isTextblock) return true;
     const text = node.textContent;
@@ -41,12 +57,34 @@ function computePlan(doc: PMNode): {
     for (const s of spans) {
       const spanFrom = blockStart + s.openFrom;
       const spanTo = blockStart + s.closeTo;
-      delims.push({ from: blockStart + s.openFrom, to: blockStart + s.openTo, spanFrom, spanTo });
-      delims.push({ from: blockStart + s.closeFrom, to: blockStart + s.closeTo, spanFrom, spanTo });
+      if (s.delimRanges) {
+        for (const dr of s.delimRanges) {
+          delims.push({
+            from: blockStart + dr.from,
+            to: blockStart + dr.to,
+            spanFrom,
+            spanTo,
+            forceVisible: dr.forceVisible,
+          });
+        }
+      } else {
+        delims.push({ from: blockStart + s.openFrom, to: blockStart + s.openTo, spanFrom, spanTo });
+        delims.push({ from: blockStart + s.closeFrom, to: blockStart + s.closeTo, spanFrom, spanTo });
+      }
+      if (s.extraDecorations) {
+        for (const ex of s.extraDecorations) {
+          extras.push({
+            from: blockStart + ex.from,
+            to: blockStart + ex.to,
+            nodeName: ex.nodeName,
+            attrs: ex.attrs,
+          });
+        }
+      }
     }
     return false; // don't descend into inline children
   });
-  return { blocks, delims };
+  return { blocks, delims, extras };
 }
 
 const normalizeKey = new PluginKey<NormalizeState>("normalize-inline");
@@ -56,8 +94,14 @@ export function normalizeInlinePlugin(): Plugin<NormalizeState> {
     key: normalizeKey,
 
     state: {
-      init: (_, state) => ({ delims: computePlan(state.doc).delims }),
-      apply: (_tr, _prev, _oldState, newState) => ({ delims: computePlan(newState.doc).delims }),
+      init: (_, state) => {
+        const p = computePlan(state.doc);
+        return { delims: p.delims, extras: p.extras };
+      },
+      apply: (_tr, _prev, _oldState, newState) => {
+        const p = computePlan(newState.doc);
+        return { delims: p.delims, extras: p.extras };
+      },
     },
 
     appendTransaction(transactions, _oldState, newState) {
@@ -121,4 +165,8 @@ function arraysEqual(a: Uint8Array, b: Uint8Array): boolean {
 
 export function getDelims(state: EditorState): DelimRange[] {
   return normalizeKey.getState(state)?.delims ?? [];
+}
+
+export function getExtras(state: EditorState): ExtraDecoration[] {
+  return normalizeKey.getState(state)?.extras ?? [];
 }

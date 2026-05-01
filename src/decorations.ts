@@ -12,15 +12,22 @@
 import { Plugin, PluginKey, type EditorState } from "prosemirror-state";
 import { Decoration, DecorationSet } from "prosemirror-view";
 
-import { getDelims } from "./normalize.ts";
+import { getDelims, getExtras } from "./normalize.ts";
 
 function buildDecorationSet(state: EditorState): DecorationSet {
   const decos: Decoration[] = [];
   const cursor = state.selection.empty ? state.selection.from : null;
   for (const d of getDelims(state)) {
-    const visible = cursor !== null && cursor >= d.spanFrom && cursor <= d.spanTo;
+    const visible =
+      d.forceVisible ||
+      (cursor !== null && cursor >= d.spanFrom && cursor <= d.spanTo);
     const cls = visible ? "syntax-hint" : "syntax-hidden";
     decos.push(Decoration.inline(d.from, d.to, { class: cls }));
+  }
+  for (const ex of getExtras(state)) {
+    decos.push(
+      Decoration.inline(ex.from, ex.to, { nodeName: ex.nodeName, ...(ex.attrs ?? {}) }),
+    );
   }
   return decos.length > 0 ? DecorationSet.create(state.doc, decos) : DecorationSet.empty;
 }

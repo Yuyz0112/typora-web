@@ -14,7 +14,7 @@ import type { FeatureSpec, InlineFeatureSpec } from "./_types.ts";
 // path — because the close delim is asymmetric and carries data. Nested
 // brackets inside content and escaped `]` are not handled yet (pilot).
 
-const LINK_RE = /\[([^\]]*?)\]\(([^\s)]+)(?:\s+"([^"]*)")?\)/g;
+const LINK_RE = /\[([^\]]*?)\]\(([^\s)]*)(?:\s+"([^"]*)")?\)/g;
 
 const scan: InlineFeatureSpec["scan"] = (text, consumed) => {
   const out: InlineSpan[] = [];
@@ -40,7 +40,9 @@ const scan: InlineFeatureSpec["scan"] = (text, consumed) => {
     const closeTo = fullEnd;
 
     markConsumed(consumed, fullStart, fullEnd);
-    out.push({
+    const href = m[2]!;
+    const title = m[3] ?? null;
+    const span: InlineSpan = {
       type: "link",
       from: contentFrom,
       to: contentTo,
@@ -48,8 +50,34 @@ const scan: InlineFeatureSpec["scan"] = (text, consumed) => {
       openTo,
       closeFrom,
       closeTo,
-      attrs: { href: m[2]!, title: m[3] ?? null },
-    });
+      attrs: { href, title },
+    };
+    // Empty link text would render as nothing if delims hid normally —
+    // override the delim layout so the link stays visible/editable.
+    if (m[1] === "") {
+      if (href === "" || title !== null) {
+        // [](): both delims forced visible. With a title we also fall
+        // back to whole-close-delim visibility (no href promotion yet).
+        span.delimRanges = [
+          { from: openFrom, to: openTo, forceVisible: true },
+          { from: closeFrom, to: closeTo, forceVisible: true },
+        ];
+      } else {
+        // [](url): split close delim around href so the url shows as
+        // link-styled visible text (mirrors autolink form).
+        const hrefStart = closeFrom + 2; // after `](`
+        const hrefEnd = closeTo - 1;     // before `)`
+        span.delimRanges = [
+          { from: openFrom, to: openTo, forceVisible: true },
+          { from: closeFrom, to: hrefStart, forceVisible: true },
+          { from: hrefEnd, to: closeTo, forceVisible: true },
+        ];
+        span.extraDecorations = [
+          { from: hrefStart, to: hrefEnd, nodeName: "a", attrs: { href } },
+        ];
+      }
+    }
+    out.push(span);
   }
   return out;
 };
@@ -165,12 +193,81 @@ export const link: FeatureSpec = {
       events: ["[", "a", "]", "(", "b", ")", " "],
       checkpoints: [
         { at: 3, expect: "[a]|" },
-        { at: 5, expect: "[a](b|" },
-        // at 6: full `[a](b)` present, normalize recognises link; cursor
-        // is at span's right edge → delims visible.
+        // at 4: auto-pair on `(` puts `)` in place. Empty href `[a]()`
+        // is now a valid link (regex allows empty href), so the link
+        // fires immediately; cursor splits the close-delim gray span.
+        { at: 4, expect: "<g>[</g><l:>a</l><g>](</g>|<g>)</g>" },
+        // at 5: typing `b` completes `[a](b)` so the link fires; cursor
+        // sits between `b` and the close `)`.
+        { at: 5, expect: "<g>[</g><l:b>a</l><g>](b</g>|<g>)</g>" },
+        // at 6: skip-over moves cursor past `)`; link span unchanged.
         { at: 6, expect: "<g>[</g><l:b>a</l><g>](b)</g>|" },
         // at 7: space pushes cursor past span → delims hidden.
         { at: 7, expect: "<l:b>a</l> |" },
+      ],
+    },
+    {
+      id: "empty-href",
+      label: "[a]() — empty href is a valid link",
+      seed: "",
+      events: ["[", "a", "]", "(", ")"],
+      checkpoints: [
+        { at: 3, expect: "[a]|" },
+        { at: 4, expect: "<g>[</g><l:>a</l><g>](</g>|<g>)</g>" },
+        // at 5: skip-over moves cursor past `)`; cursor sits at span's
+        // right edge so delims stay visible (same as inline-link at:6).
+        { at: 5, expect: "<g>[</g><l:>a</l><g>]()</g>|" },
+      ],
+    },
+    {
+      id: "href-with-query",
+      label: "[a](http://x.com/p?q=1&r=2) — query chars survive in href",
+      seed: "[a](http://x.com/p?q=1&r=2) ",
+      events: [],
+      checkpoints: [
+        { at: 0, expect: "<l:http://x.com/p?q=1&r=2>a</l> |" },
+      ],
+    },
+    {
+      id: "empty-link-stable",
+      label: "[]() stable — empty text keeps delims visible",
+      seed: "[]() ",
+      events: [],
+      checkpoints: [
+        // cursor parked at end (after trailing space, outside span).
+        // Empty text means delims stay gray instead of hiding, otherwise
+        // the link would be invisible/uneditable.
+        { at: 0, expect: "<g>[</g><g>]()</g> |" },
+      ],
+    },
+    {
+      id: "empty-text-only-href-stable",
+      label: "[](url) stable — empty text promotes url to visible link text",
+      seed: "[](http://x.com) ",
+      events: [],
+      checkpoints: [
+        // text empty: `[`, `](`, `)` stay gray; href text inside the
+        // close delim renders with link style, mirroring autolink form.
+        {
+          at: 0,
+          expect:
+            "<g>[</g><g>](</g><l:http://x.com>http://x.com</l><g>)</g> |",
+        },
+      ],
+    },
+    {
+      id: "empty-link",
+      label: "[]() — empty text + empty href, all chars are delim",
+      seed: "",
+      events: ["[", "]", "("],
+      checkpoints: [
+        { at: 1, expect: "[|]" },
+        { at: 2, expect: "[]|" },
+        // at 3: doc is `[]()`, link mark covers all 4 chars (all delim).
+        // open delim `[` and close delim `](...)` are emitted as separate
+        // decorations (content is empty between them); cursor between `(`
+        // and `)` splits the close-delim span.
+        { at: 3, expect: "<g>[</g><g>](</g>|<g>)</g>" },
       ],
     },
   ],

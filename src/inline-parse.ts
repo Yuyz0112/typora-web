@@ -22,6 +22,19 @@ export type InlineSpan = {
   // Optional mark attrs — used by features whose mark carries data, e.g.
   // link's {href, title}. normalize passes these to markType.create(attrs).
   attrs?: Record<string, unknown>;
+  // When provided, overrides the default open/close delim emission. Each
+  // entry becomes a DelimRange. Used by empty-content links where the
+  // open/close split alone wouldn't capture the right rendering.
+  delimRanges?: Array<{ from: number; to: number; forceVisible?: boolean }>;
+  // Extra inline decorations (non-delim) the feature wants drawn over its
+  // span. Used to give an empty-text link's href a visible link-styled
+  // wrapper without adding a stray link mark to the doc.
+  extraDecorations?: Array<{
+    from: number;
+    to: number;
+    nodeName: string;
+    attrs?: Record<string, string>;
+  }>;
 };
 
 export type Run = { pos: number; len: number; canOpen: boolean; canClose: boolean };

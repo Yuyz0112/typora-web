@@ -14,6 +14,48 @@ import { schema } from "./schema.ts";
 const md: MarkdownIt = new MarkdownIt("commonmark", { html: false });
 for (const plugin of collectMdItPlugins()) md.use(plugin);
 
+// Preserve trailing whitespace inside paragraphs.
+//
+// The default paragraph rule does `state.getLines(...).trim()` on the
+// final content, which discards trailing spaces. That breaks lossless
+// round-trip — md text `"[a](url) "` would parse to a doc whose text is
+// `"[a](url)"`, dropping a real source char. We replace the rule with
+// the same logic minus the trim, since the only whitespace we'd want to
+// strip (leading indent, trailing newline) is already handled by
+// `blkIndent` and getLines' `keepLastLF=false`.
+md.block.ruler.at("paragraph", function paragraphPreserveTrailing(state, startLine, endLine) {
+  const terminatorRules = state.md.block.ruler.getRules("paragraph");
+  const oldParentType = state.parentType;
+  let nextLine = startLine + 1;
+  state.parentType = "paragraph";
+
+  for (; nextLine < endLine && !state.isEmpty(nextLine); nextLine++) {
+    if (state.sCount[nextLine] - state.blkIndent > 3) continue;
+    if (state.sCount[nextLine] < 0) continue;
+    let terminate = false;
+    for (let i = 0; i < terminatorRules.length; i++) {
+      if (terminatorRules[i]!(state, nextLine, endLine, true)) {
+        terminate = true;
+        break;
+      }
+    }
+    if (terminate) break;
+  }
+
+  const content = state.getLines(startLine, nextLine, state.blkIndent, false);
+  state.line = nextLine;
+
+  state.push("paragraph_open", "p", 1).map = [startLine, state.line];
+  const token_i = state.push("inline", "", 0);
+  token_i.content = content;
+  token_i.map = [startLine, state.line];
+  token_i.children = [];
+  state.push("paragraph_close", "p", -1);
+
+  state.parentType = oldParentType;
+  return true;
+});
+
 const featureTokens = collectParserTokens();
 
 type Frame = { type: NodeType; attrs: Attrs | null; content: PMNode[] };
