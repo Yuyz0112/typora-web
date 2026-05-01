@@ -245,11 +245,10 @@ export const list: FeatureSpec = {
       seed: "",
       events: ["-", " "],
       checkpoints: [
-        // [CONFIDENT] bare `-` before the trigger space is still a paragraph.
         { at: 1, expect: "-|" },
-        // [VERIFY] after space: empty list_item, cursor at item start.
-        //   pretty: ul → "- " prefix + li children (empty) + caret.
-        { at: 2, expect: "- |" },
+        // wrappingInputRule fires → `<ul>` wrapper makes the list state
+        // unambiguous (would otherwise look like a paragraph with `- `).
+        { at: 2, expect: "<ul>- |</ul>" },
       ],
     },
 
@@ -260,7 +259,6 @@ export const list: FeatureSpec = {
       seed: "",
       events: ["-", "a"],
       checkpoints: [
-        // [CONFIDENT] input rule never fires → still a paragraph.
         { at: 2, expect: "-a|" },
       ],
     },
@@ -272,9 +270,8 @@ export const list: FeatureSpec = {
       seed: "",
       events: ["-", " ", "a"],
       checkpoints: [
-        { at: 2, expect: "- |" },
-        // [CONFIDENT]
-        { at: 3, expect: "- a|" },
+        { at: 2, expect: "<ul>- |</ul>" },
+        { at: 3, expect: "<ul>- a|</ul>" },
       ],
     },
 
@@ -285,12 +282,9 @@ export const list: FeatureSpec = {
       seed: "",
       events: ["-", " ", "a", "<Enter>", "b"],
       checkpoints: [
-        { at: 3, expect: "- a|" },
-        // [VERIFY] new empty second item, cursor at its start.
-        //   ul renders each child li on its own line with `- ` prefix.
-        { at: 4, expect: "- a\n- |" },
-        // [VERIFY]
-        { at: 5, expect: "- a\n- b|" },
+        { at: 3, expect: "<ul>- a|</ul>" },
+        { at: 4, expect: "<ul>- a\n- |</ul>" },
+        { at: 5, expect: "<ul>- a\n- b|</ul>" },
       ],
     },
 
@@ -301,11 +295,10 @@ export const list: FeatureSpec = {
       seed: "",
       events: ["-", " ", "a", "<Enter>", "<Enter>"],
       checkpoints: [
-        { at: 4, expect: "- a\n- |" },
-        // [VERIFY] the empty item is lifted out, becoming a sibling paragraph
-        //   after the (now one-item) list. pretty joins block children with
-        //   "\n" — so: list line, then an empty paragraph with the caret.
-        { at: 5, expect: "- a\n|" },
+        { at: 4, expect: "<ul>- a\n- |</ul>" },
+        // empty item lifted out → list now has one item, then a sibling
+        // empty paragraph (block children separated by "\n").
+        { at: 5, expect: "<ul>- a</ul>\n|" },
       ],
     },
 
@@ -316,44 +309,28 @@ export const list: FeatureSpec = {
       seed: "- a",
       events: ["<Enter>", "<Tab>", "b"],
       checkpoints: [
-        // [VERIFY] assumes seed places cursor at end of "a"; Enter gives
-        //   an empty sibling item.
-        { at: 1, expect: "- a\n- |" },
-        // [VERIFY] sinkListItem wraps the empty item into a nested ul under
-        //   the first item. pretty indent is 2 spaces (prefix "- ".length).
-        { at: 2, expect: "- a\n  - |" },
-        // [VERIFY]
-        { at: 3, expect: "- a\n  - b|" },
+        { at: 1, expect: "<ul>- a\n- |</ul>" },
+        // sink → nested ul inside first li. Both wrappers visible.
+        { at: 2, expect: "<ul>- a\n  <ul>- |</ul></ul>" },
+        { at: 3, expect: "<ul>- a\n  <ul>- b|</ul></ul>" },
       ],
     },
 
     // ── 7. Nested staircase exit ────────────────────────────────────────
-    //
-    // seed:     - a
-    //             - b|    (cursor at end of `b`)
-    //
-    // Sequence (Typora-verified in the task spec):
-    //   Enter 1 → empty sibling at the inner level       `- a\n  - b\n  - |`
-    //   Enter 2 → LIFT once: intermediate state,
-    //             bare paragraph inside outer <li>
-    //             (indented, no bullet)                  ???  [PROBABLY WRONG]
-    //   Enter 3 → LIFT again: surfaces as sibling of `a` `- a\n  - b\n- |`
     {
       id: "staircase-exit",
       label: "Nested empty item + repeated Enter: 3-step Typora staircase",
-      // setup() places the cursor at doc end, which is already end of `b`.
       seed: "- a\n  - b",
       events: ["<Enter>", "<Enter>", "<Enter>", "<Enter>"],
       checkpoints: [
-        // Enter 1: splitListItem — new empty nested sibling.
-        { at: 1, expect: "- a\n  - b\n  - |" },
-        // Enter 2: bulletless intermediate — empty nested li becomes a
-        // bare paragraph appended to the outer li (after the nested ul).
-        { at: 2, expect: "- a\n  - b\n  <li-tail>|</li-tail>" },
-        // Enter 3: bulletless p is promoted to outer-sibling list_item.
-        { at: 3, expect: "- a\n  - b\n- |" },
-        // Enter 4: liftListItem exits the list entirely.
-        { at: 4, expect: "- a\n  - b\n|" },
+        { at: 1, expect: "<ul>- a\n  <ul>- b\n  - |</ul></ul>" },
+        // bulletless intermediate: nested ul closes, then a <li-tail>
+        // sits inside the outer li.
+        { at: 2, expect: "<ul>- a\n  <ul>- b</ul>\n  <li-tail>|</li-tail></ul>" },
+        // promote to outer sibling.
+        { at: 3, expect: "<ul>- a\n  <ul>- b</ul>\n- |</ul>" },
+        // exit list entirely.
+        { at: 4, expect: "<ul>- a\n  <ul>- b</ul></ul>\n|" },
       ],
     },
 

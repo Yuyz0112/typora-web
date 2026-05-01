@@ -96,10 +96,14 @@ function renderNode(n: Node): string {
     }
     case "ul":
     case "ol": {
+      // Wrap with <ul>/<ol> so a list item is distinguishable from a
+      // paragraph that just happens to start with `- ` / `1. ` (the same
+      // ambiguity blockquote solves with `<bq>`). Nested lists keep their
+      // own wrappers so nesting depth is explicit too.
       const isOrdered = tag === "ol";
       const startAttr = el.getAttribute("start");
       const start = startAttr ? Number(startAttr) : 1;
-      return Array.from(el.children)
+      const inner = Array.from(el.children)
         .map((li, i) => {
           const liContent = renderNode(li);
           const prefix = isOrdered ? `${start + i}. ` : "- ";
@@ -110,6 +114,13 @@ function renderNode(n: Node): string {
             .join("\n");
         })
         .join("\n");
+      const open = isOrdered
+        ? start === 1
+          ? "<ol>"
+          : `<ol s=${start}>`
+        : "<ul>";
+      const close = isOrdered ? "</ol>" : "</ul>";
+      return `${open}${inner}${close}`;
     }
     case "li": {
       // First block child carries the bullet (parent ul/ol prepends `- `).
