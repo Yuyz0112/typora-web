@@ -22,7 +22,7 @@ import type { FeatureSpec } from "./_types.ts";
 // Fire when the cursor sits in an empty paragraph inside an empty NESTED
 // list_item (grandparent-of-li is itself a list_item). Delete the nested
 // li and append a bulletless paragraph to the outer li.
-function liftNestedEmptyItemToBulletless(
+export function liftNestedEmptyItemToBulletless(
   li: NodeType,
   paragraph: NodeType,
 ): Command {

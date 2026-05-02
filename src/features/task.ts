@@ -1,10 +1,11 @@
 import type { Node as PMNode } from "prosemirror-model";
 import { liftListItem, splitListItem } from "prosemirror-schema-list";
 import { InputRule } from "prosemirror-inputrules";
-import { Plugin, TextSelection, type Command } from "prosemirror-state";
+import { Plugin, TextSelection, type Command, type Transaction } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
 
 import type { FeatureSpec } from "./_types.ts";
+import { liftNestedEmptyItemToBulletless } from "./list.ts";
 
 // Task list — implemented as an atom inline node `task_marker` that lives
 // at the start of a list_item's first paragraph. The node renders as a
@@ -76,8 +77,10 @@ function transformListItem(li: PMNode): PMNode {
   )!;
 
   const newLiChildren: PMNode[] = [newPara];
+  // Tail children may include nested ul/ol — recurse so inner list_items
+  // also get the prefix-fold treatment.
   li.forEach((child, _, idx) => {
-    if (idx > 0) newLiChildren.push(child);
+    if (idx > 0) newLiChildren.push(transformBlock(child));
   });
   return li.type.createAndFill(li.attrs, newLiChildren)!;
 }
@@ -137,9 +140,14 @@ function buildNodeView() {
       e.stopPropagation();
       const pos = getPos();
       if (pos == null) return;
+      // Read the live state's node, NOT the closure's `node` — closure is
+      // captured when the NodeView is built and its attrs go stale on
+      // every toggle (so checked → checked → checked instead of toggling).
+      const cur = view.state.doc.nodeAt(pos);
+      if (!cur) return;
       view.dispatch(
         view.state.tr.setNodeMarkup(pos, undefined, {
-          checked: !node.attrs.checked,
+          checked: !cur.attrs.checked,
         }),
       );
     };
@@ -234,48 +242,13 @@ function isTaskListItem(li: PMNode): boolean {
   return !!inner && inner.type.name === "task_marker";
 }
 
-const taskEnter: Command = (state, dispatch) => {
-  const sel = state.selection;
-  if (!sel.empty) return false;
-  const $from = sel.$from;
-  let liDepth = -1;
-  for (let d = $from.depth; d > 0; d--) {
-    if ($from.node(d).type.name === "list_item") {
-      liDepth = d;
-      break;
-    }
-  }
-  if (liDepth < 0) return false;
-  const li = $from.node(liDepth);
-  if (!isTaskListItem(li)) return false;
-  const para = li.firstChild!;
-  // Marker-only when the paragraph contains exactly one inline child (the
-  // marker) — content size 1.
-  const markerOnly = para.content.size === 1;
-
-  if (markerOnly) {
-    // Atomic delete-marker + lift list_item out of the list.
-    const pStart = $from.before(liDepth) + 2; // li open + p open
-    const tr = state.tr.delete(pStart, pStart + 1); // task_marker is 1 pos
-    const after = state.apply(tr);
-    const lift = liftListItem(state.schema.nodes.list_item);
-    let liftPos = -1;
-    lift(after, (liftTr) => {
-      for (const step of liftTr.steps) tr.step(step);
-      liftPos = liftTr.selection.from;
-    });
-    if (liftPos >= 0) {
-      tr.setSelection(TextSelection.create(tr.doc, liftPos));
-    }
-    if (dispatch) dispatch(tr);
-    return true;
-  }
-
-  // Has content beyond the marker: split + seed the new sibling with the
-  // same marker shape.
+function doSplitPropagate(
+  state: import("prosemirror-state").EditorState,
+  dispatch: ((tr: Transaction) => void) | undefined,
+  checked: boolean,
+): boolean {
   const splitCmd = splitListItem(state.schema.nodes.list_item);
-  const checked = para.firstChild!.attrs.checked === true;
-  let combined: import("prosemirror-state").Transaction | null = null;
+  let combined: Transaction | null = null;
   splitCmd(state, (splitTr) => {
     const tr = state.tr;
     for (const step of splitTr.steps) tr.step(step);
@@ -291,7 +264,181 @@ const taskEnter: Command = (state, dispatch) => {
   if (!combined) return false;
   if (dispatch) dispatch(combined);
   return true;
+}
+
+// Delete the task_marker (1 atom pos) at the start of the cursor's
+// paragraph, then run a follow-up command on the post-delete state.
+// Implemented as two dispatches because some PM lift commands (notably
+// `liftListItem`) build ReplaceAroundStep steps whose Gap range can't
+// be safely re-applied to a transaction that already has an unrelated
+// step in front — copying the steps verbatim trips PM's "Gap is not a
+// flat range" check. Two dispatches sidestep that without re-implementing
+// the lift logic. The pair lands in the same input tick so the user sees
+// a single visual update; undo will require two presses (acceptable).
+function doDeleteAndFollow(
+  state: import("prosemirror-state").EditorState,
+  dispatch: ((tr: Transaction) => void) | undefined,
+  view: EditorView | undefined,
+  pStart: number,
+  follow: Command,
+): boolean {
+  const trDelete = state.tr.delete(pStart, pStart + 1);
+  // Dry-run check for keymap chaining — if no dispatch, just probe.
+  if (!dispatch) {
+    const after = state.apply(trDelete);
+    return follow(after, undefined);
+  }
+  if (!view) {
+    // Without a view we can't read the post-dispatch state. Best-effort:
+    // dispatch only the delete. The follow-up will fire on the next user
+    // Enter.
+    dispatch(trDelete);
+    return true;
+  }
+  // Both transactions get a meta flag so the marker-propagation appendTx
+  // (below) doesn't refill the just-deleted marker — without this, deleting
+  // the marker as part of an exit immediately gets undone.
+  trDelete.setMeta(NO_PROPAGATE_META, true);
+  dispatch(trDelete);
+  const next = view.state;
+  follow(next, (followTr) => {
+    followTr.setMeta(NO_PROPAGATE_META, true);
+    view.dispatch(followTr);
+  });
+  return true;
+}
+
+const NO_PROPAGATE_META = "task-no-propagate";
+
+// Enter handling — operates only on cursor sitting at the start of a task
+// list_item's first (task) paragraph. Otherwise returns false and the
+// list feature's chain runs.
+//
+// Cases:
+//   - has content beyond the marker (paragraph size > 1) → split + seed
+//     the new sibling with a marker (consecutive tasks stay tasks).
+//   - marker-only top-level + has prev sibling → exit: delete marker +
+//     liftListItem (matches "second consecutive Enter exits" of plain
+//     lists, but with the marker in the way).
+//   - marker-only top-level + no prev → propagate (lone empty task →
+//     create a second empty task; the user wants to keep adding).
+//   - marker-only nested → delete marker + liftNestedEmptyItemToBulletless
+//     (Step 1 of the staircase exit; subsequent steps are handled by
+//     list.ts's chain + propagation appendTransaction below).
+const taskEnter: Command = (state, dispatch, view) => {
+  const sel = state.selection;
+  if (!sel.empty) return false;
+  const $from = sel.$from;
+  let liDepth = -1;
+  for (let d = $from.depth; d > 0; d--) {
+    if ($from.node(d).type.name === "list_item") {
+      liDepth = d;
+      break;
+    }
+  }
+  if (liDepth < 0) return false;
+  const li = $from.node(liDepth);
+  if (!isTaskListItem(li)) return false;
+  // Cursor must be in the FIRST child paragraph (the one with the marker).
+  // If the cursor is in a tail block (li-tail / nested ul), let list handle.
+  if ($from.index(liDepth) !== 0) return false;
+  const para = li.firstChild!;
+  const checked = para.firstChild!.attrs.checked === true;
+  const markerOnly = para.content.size === 1;
+
+  if (!markerOnly) {
+    return doSplitPropagate(state, dispatch, checked);
+  }
+
+  // Marker-only.
+  const isTopLevel = liDepth === 2; // doc/ul/li
+  const pStart = $from.before(liDepth) + 2; // li open + p open
+
+  if (isTopLevel) {
+    const list = $from.node(liDepth - 1);
+    const liIdx = $from.index(liDepth - 1);
+    const hasPrev = liIdx > 0;
+    if (hasPrev) {
+      // Exit: delete marker + liftListItem.
+      return doDeleteAndFollow(
+        state,
+        dispatch,
+        view,
+        pStart,
+        liftListItem(state.schema.nodes.list_item),
+      );
+    }
+    // No prev sibling → propagate (single-empty-task convenience).
+    return doSplitPropagate(state, dispatch, checked);
+  }
+
+  // Nested marker-only → step 1 of staircase: bulletless intermediate.
+  return doDeleteAndFollow(
+    state,
+    dispatch,
+    view,
+    pStart,
+    liftNestedEmptyItemToBulletless(
+      state.schema.nodes.list_item,
+      state.schema.nodes.paragraph,
+    ),
+  );
 };
+
+// Propagate task_marker into any newly-emptied li that follows a task
+// li at the same level — covers the "Enter from bulletless paragraph
+// promotes to outer-level li, which should inherit the task shape"
+// step of the staircase, plus plain insertions next to a task in
+// general (consecutive tasks stay tasks even when the user mixes in
+// list-only operations).
+function propagateMarkerPlugin(): Plugin {
+  return new Plugin({
+    appendTransaction(transactions, _oldState, newState) {
+      if (!transactions.some((t) => t.docChanged)) return null;
+      // taskEnter's delete + lift dispatches set this flag so we don't
+      // immediately re-insert the marker we just deleted.
+      if (transactions.some((t) => t.getMeta(NO_PROPAGATE_META))) return null;
+      const tr = newState.tr;
+      let changed = false;
+      newState.doc.descendants((node, pos) => {
+        if (
+          node.type.name !== "bullet_list" &&
+          node.type.name !== "ordered_list"
+        ) {
+          return true;
+        }
+        let off = pos + 1;
+        let prevIsTask = false;
+        for (let i = 0; i < node.childCount; i++) {
+          const li = node.child(i);
+          const liEnd = off + li.nodeSize;
+          const firstChild = li.firstChild;
+          const isEmpty =
+            li.childCount === 1 &&
+            firstChild?.type.name === "paragraph" &&
+            firstChild.content.size === 0;
+          const isTask = isTaskListItem(li);
+          if (prevIsTask && isEmpty && !isTask) {
+            const insertPos = off + 2; // li open + p open
+            const mapped = tr.mapping.map(insertPos);
+            tr.replaceWith(
+              mapped,
+              mapped,
+              newState.schema.nodes.task_marker.create({ checked: false }),
+            );
+            changed = true;
+          }
+          prevIsTask = isTask;
+          off = liEnd;
+        }
+        // Continue descending so nested ul/ol inside list_items also get
+        // their own task_marker propagation pass.
+        return true;
+      });
+      return changed ? tr : null;
+    },
+  });
+}
 
 // ──────────────────────────────────────────────────────────────────────
 // Feature export
@@ -307,7 +454,7 @@ export const task: FeatureSpec = {
 
   inputRules: () => [taskInputRule],
   keymap: () => ({ Enter: taskEnter }),
-  plugins: () => [nodeViewPlugin(), cursorTrapPlugin()],
+  plugins: () => [nodeViewPlugin(), cursorTrapPlugin(), propagateMarkerPlugin()],
 
   cases: [
     {
@@ -348,14 +495,108 @@ export const task: FeatureSpec = {
       ],
     },
     {
-      id: "marker-only-enter-exits",
-      label: "Enter on a marker-only task item exits the task list",
-      seed: "- [ ] a",
-      events: ["<Enter>", "<Enter>"],
+      id: "single-empty-enter-propagates",
+      label: "Enter on a lone empty task creates another empty task",
+      seed: "- [ ] ",
+      events: ["<Enter>"],
       checkpoints: [
-        { at: 0, expect: "<ul><li><checkbox/>a|</li></ul>" },
-        { at: 1, expect: "<ul><li><checkbox/>a</li><li><checkbox/>|</li></ul>" },
-        { at: 2, expect: "<ul><li><checkbox/>a</li></ul>\n|" },
+        { at: 0, expect: "<ul><li><checkbox/>|</li></ul>" },
+        { at: 1, expect: "<ul><li><checkbox/></li><li><checkbox/>|</li></ul>" },
+      ],
+    },
+    {
+      id: "two-empty-enter-exits",
+      label: "Enter on the second of two empty tasks exits to plain paragraph",
+      // Build the state via typing rather than seed (parser would also work).
+      seed: "",
+      events: [
+        "-", " ", "[", " ", "]", " ", // first task
+        "<Enter>",                    // propagate → 2nd empty task
+        "<Enter>",                    // exit
+      ],
+      checkpoints: [
+        { at: 6, expect: "<ul><li><checkbox/>|</li></ul>" },
+        { at: 7, expect: "<ul><li><checkbox/></li><li><checkbox/>|</li></ul>" },
+        { at: 8, expect: "<ul><li><checkbox/></li></ul>\n|" },
+      ],
+    },
+    {
+      id: "deep-nested-staircase",
+      label: "3-level nested empty task: each Enter peels off one level (with marker propagation)",
+      seed: "- [ ] A\n  - [ ] B\n    - [ ] C\n    - [ ] ",
+      events: ["<Enter>", "<Enter>", "<Enter>", "<Enter>", "<Enter>"],
+      checkpoints: [
+        {
+          at: 0,
+          expect:
+            "<ul><li><checkbox/>A<ul><li><checkbox/>B<ul><li><checkbox/>C</li><li><checkbox/>|</li></ul></li></ul></li></ul>",
+        },
+        // E1: level-3 marker-only → bulletless tail inside level-2 li(B).
+        {
+          at: 1,
+          expect:
+            "<ul><li><checkbox/>A<ul><li><checkbox/>B<ul><li><checkbox/>C</li></ul><li-tail>|</li-tail></li></ul></li></ul>",
+        },
+        // E2: bulletless paragraph in level-2 li(B) → promote to sibling
+        // li at level-1; propagation gives it a task_marker.
+        {
+          at: 2,
+          expect:
+            "<ul><li><checkbox/>A<ul><li><checkbox/>B<ul><li><checkbox/>C</li></ul></li><li><checkbox/>|</li></ul></li></ul>",
+        },
+        // E3: level-1 marker-only → bulletless tail inside top-li(A).
+        {
+          at: 3,
+          expect:
+            "<ul><li><checkbox/>A<ul><li><checkbox/>B<ul><li><checkbox/>C</li></ul></li></ul><li-tail>|</li-tail></li></ul>",
+        },
+        // E4: bulletless paragraph in top-li(A) → promote to top-level
+        // sibling; propagation gives it a task_marker.
+        {
+          at: 4,
+          expect:
+            "<ul><li><checkbox/>A<ul><li><checkbox/>B<ul><li><checkbox/>C</li></ul></li></ul></li><li><checkbox/>|</li></ul>",
+        },
+        // E5: top-level marker-only with prev → exit list to plain p.
+        {
+          at: 5,
+          expect:
+            "<ul><li><checkbox/>A<ul><li><checkbox/>B<ul><li><checkbox/>C</li></ul></li></ul></li></ul>\n|",
+        },
+      ],
+    },
+    {
+      id: "nested-staircase-exit",
+      label: "Nested empty task: 3-step staircase exit (bulletless → outer task → plain)",
+      seed: "- [ ] a\n  - [ ] b\n  - [ ] ",
+      events: ["<Enter>", "<Enter>", "<Enter>"],
+      checkpoints: [
+        {
+          at: 0,
+          expect:
+            "<ul><li><checkbox/>a<ul><li><checkbox/>b</li><li><checkbox/>|</li></ul></li></ul>",
+        },
+        // Enter 1: delete task_marker + liftNestedEmptyItemToBulletless.
+        // Bulletless paragraph appears in outer li after the nested ul.
+        {
+          at: 1,
+          expect:
+            "<ul><li><checkbox/>a<ul><li><checkbox/>b</li></ul><li-tail>|</li-tail></li></ul>",
+        },
+        // Enter 2: list chain → liftBulletlessParagraphToListItem creates
+        // an empty outer-level li; propagateMarkerPlugin then inserts
+        // a task_marker since the prev sibling is a task.
+        {
+          at: 2,
+          expect:
+            "<ul><li><checkbox/>a<ul><li><checkbox/>b</li></ul></li><li><checkbox/>|</li></ul>",
+        },
+        // Enter 3: outer-level marker-only with prev → exit.
+        {
+          at: 3,
+          expect:
+            "<ul><li><checkbox/>a<ul><li><checkbox/>b</li></ul></li></ul>\n|",
+        },
       ],
     },
     {

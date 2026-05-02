@@ -268,3 +268,34 @@ html, body { margin: 0; padding: 0; font: 16px/1.6 -apple-system, system-ui, san
 }
 .case-pretty { color: #333; }
 .case-md { color: #555; }
+
+/* Wrap long pretty/md output instead of horizontal-scrolling — the
+ * harness panes are narrow and the dumps are read across not down. */
+.wrap-pre {
+  white-space: pre-wrap !important;
+  word-break: break-word;
+  overflow-x: hidden !important;
+}
+
+/* Copy button — small, sits in the corner of a pretty/md dump. The
+ * .dump-wrap parent is positioned relative so the button anchors. */
+.dump-wrap { position: relative; }
+.copy-btn {
+  font: 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  padding: 2px 6px;
+  border: 1px solid #d0d0d0;
+  background: #fff;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #555;
+}
+.copy-btn:hover { background: #f0f0f0; }
+.copy-btn-corner {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 1;
+}
+.dump summary .copy-btn {
+  margin-left: 8px;
+}

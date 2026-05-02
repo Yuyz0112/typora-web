@@ -61,12 +61,12 @@ root.innerHTML = `
     <div class="pane pane-editor" id="free-editor"></div>
     <div class="free-dumps">
       <details class="dump" open>
-        <summary>pretty() snapshot</summary>
-        <pre id="free-pretty-dump"></pre>
+        <summary>pretty() snapshot <button class="copy-btn" data-copy="free-pretty-dump">copy</button></summary>
+        <pre id="free-pretty-dump" class="wrap-pre"></pre>
       </details>
       <details class="dump" open>
-        <summary>serialize() (md)</summary>
-        <pre id="free-md-dump"></pre>
+        <summary>serialize() (md) <button class="copy-btn" data-copy="free-md-dump">copy</button></summary>
+        <pre id="free-md-dump" class="wrap-pre"></pre>
       </details>
     </div>
 
@@ -112,8 +112,14 @@ function createCard(script: Script, getSpeed: () => number): Card {
     <div class="case-body">
       <div class="case-editor"></div>
       <div class="case-dumps">
-        <pre class="case-pretty"></pre>
-        <pre class="case-md"></pre>
+        <div class="dump-wrap">
+          <button class="copy-btn copy-btn-corner" data-copy-sibling="pretty">copy</button>
+          <pre class="case-pretty wrap-pre"></pre>
+        </div>
+        <div class="dump-wrap">
+          <button class="copy-btn copy-btn-corner" data-copy-sibling="md">copy</button>
+          <pre class="case-md wrap-pre"></pre>
+        </div>
       </div>
     </div>
   `;
@@ -265,3 +271,33 @@ for (const s of SCRIPTS) {
   const card = createCard(s, getSpeed);
   $caseList.append(card.el);
 }
+
+// Global copy-button handler. Each `.copy-btn` either has `data-copy="<id>"`
+// (target by id, used in the free editor) or `data-copy-sibling="pretty"|
+// "md"` (find the sibling .case-pretty / .case-md inside the same
+// .dump-wrap, used in case cards). Click → copy text to clipboard, briefly
+// show "✓".
+document.addEventListener("click", (e) => {
+  const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".copy-btn");
+  if (!btn) return;
+  e.preventDefault();
+  let target: Element | null = null;
+  const id = btn.getAttribute("data-copy");
+  if (id) target = document.getElementById(id);
+  const sib = btn.getAttribute("data-copy-sibling");
+  if (sib) {
+    const wrap = btn.closest(".dump-wrap");
+    target = wrap?.querySelector(sib === "pretty" ? ".case-pretty" : ".case-md") ?? null;
+  }
+  if (!target) return;
+  const text = target.textContent ?? "";
+  navigator.clipboard.writeText(text).then(() => {
+    const orig = btn.textContent ?? "copy";
+    btn.textContent = "✓";
+    setTimeout(() => {
+      btn.textContent = orig;
+    }, 800);
+  }).catch(() => {
+    // ignore
+  });
+});
