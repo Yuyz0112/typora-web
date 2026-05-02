@@ -3,6 +3,7 @@ import type { Mark, Node as PMNode } from "prosemirror-model";
 import {
   collectBlockHandlers,
   collectInlineFeatures,
+  collectInlineNodeHandlers,
   collectMarkDelims,
 } from "./features/index.ts";
 import { schema } from "./schema.ts";
@@ -60,7 +61,7 @@ type InternalMarker = PosMarker & { side: "inner" | "outer"; done: boolean };
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-class SerializerState {
+export class SerializerState {
   out = "";
   delim = "";
   private closed: PMNode | null = null;
@@ -204,6 +205,18 @@ class SerializerState {
         return;
       }
 
+      // Feature-contributed inline atom nodes (e.g. task_marker) — they
+      // serialize to a fixed text shape and don't carry marks.
+      const inlineHandler = inlineNodeHandlers[child.type.name];
+      if (inlineHandler) {
+        closeMarks([]);
+        this.write();
+        inlineHandler(this, child);
+        // Atom nodes occupy 1 position in the textblock; track block offset.
+        blockOffset += child.nodeSize;
+        return;
+      }
+
       if (child.type === schema.nodes.hard_break) {
         closeMarks([]);
         this.write();
@@ -323,6 +336,10 @@ const coreBlockHandlers: Record<string, BlockHandler> = {
 
 // Feature-contributed block handlers win over core when names collide (lets
 // a feature migrate a core node type wholesale, not yet exercised).
+const inlineNodeHandlers: NonNullable<
+  ReturnType<typeof collectInlineNodeHandlers>
+> = collectInlineNodeHandlers();
+
 const blockHandlers: Record<string, BlockHandler> = {
   ...coreBlockHandlers,
   ...collectBlockHandlers(),

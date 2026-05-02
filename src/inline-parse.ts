@@ -11,6 +11,9 @@ import type { Node as PMNode } from "prosemirror-model";
 
 import { collectInlineFeatures } from "./features/index.ts";
 
+// Some inline features need parent context (e.g. task-list trigger only
+// fires for textblocks directly inside a list_item). parseInline threads
+// the parent textblock node through to each feature's scan.
 export type InlineSpan = {
   type: string; // mark name — filled by the scanning feature
   from: number;
@@ -35,6 +38,16 @@ export type InlineSpan = {
     // a code fence — it should disappear in the stable view but remain
     // visible (and editable) while the user has the fence open.
     softInside?: boolean;
+    // forceHidden: chars are visually absent regardless of cursor — used
+    // by atomic markers like task-list `[ ] ` whose source the user can
+    // not navigate into.
+    forceHidden?: boolean;
+    // Override the CSS class on the forceHidden / soft / standard span.
+    // Example: task uses a width:0 inline-block (so the line keeps a
+    // normal caret-height) instead of the global syntax-hidden's
+    // font-size:0 (which collapses caret height when nothing else is on
+    // the line).
+    className?: string;
   }>;
   // Extra inline decorations (non-delim) the feature wants drawn over its
   // span. Used to give an empty-text link's href a visible link-styled
@@ -173,12 +186,17 @@ export function markExtRanges(
   return ranges;
 }
 
-// Orchestration.
-export function parseInline(text: string): InlineSpan[] {
+// Orchestration. `parentBlock` is the textblock's parent node (e.g. a
+// list_item or doc) — passed through so block-context-sensitive scans
+// (task-list) can introspect.
+export function parseInline(
+  text: string,
+  parentBlock: PMNode | null = null,
+): InlineSpan[] {
   const out: InlineSpan[] = [];
   const consumed = new Uint8Array(text.length);
   for (const f of collectInlineFeatures()) {
-    for (const s of f.scan(text, consumed)) out.push(s);
+    for (const s of f.scan(text, consumed, parentBlock)) out.push(s);
   }
   return out;
 }

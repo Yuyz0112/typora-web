@@ -33,6 +33,9 @@ describe("round-trip: blocks", () => {
 
 describe("round-trip: lists", () => {
   test("bullet list", () => roundTripStable("- a\n- b\n- c"));
+  test("task list unchecked", () => roundTripStable("- [ ] foo"));
+  test("task list checked", () => roundTripStable("- [x] foo"));
+  test("task list mixed", () => roundTripStable("- [ ] todo\n- [x] done\n- plain"));
   test("ordered list default start", () => roundTripStable("1. a\n2. b"));
   test("ordered list with start", () => roundTripStable("5. a\n6. b"));
   test("nested bullet list", () => roundTripStable("- outer\n  - inner\n- next"));

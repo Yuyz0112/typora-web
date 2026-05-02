@@ -8,7 +8,11 @@ import {
   type NodeType,
 } from "prosemirror-model";
 
-import { collectMdItPlugins, collectParserTokens } from "./features/index.ts";
+import {
+  collectMdItPlugins,
+  collectParserPostProcessors,
+  collectParserTokens,
+} from "./features/index.ts";
 import { schema } from "./schema.ts";
 
 const md: MarkdownIt = new MarkdownIt("commonmark", { html: false });
@@ -205,5 +209,7 @@ export function parse(src: string): PMNode {
   const tokens = md.parse(src, {});
   const state = new ParserState();
   for (const token of tokens) handleBlock(state, token);
-  return state.finish();
+  let doc = state.finish();
+  for (const f of collectParserPostProcessors()) doc = f(doc);
+  return doc;
 }

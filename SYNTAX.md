@@ -19,7 +19,7 @@ Status legend:
 | bullet list `-` / `*` / `+` | ✅ | `list` | tight/loose distinction not asserted |
 | ordered list `1.` | ✅ | `list` | |
 | nested list | ✅ | `list` | 3-step staircase exit (Typora-style) |
-| task list `- [ ]` / `- [x]` | ❌ | — | GFM; high value for Typora parity |
+| task list `- [ ]` / `- [x]` | ✅ | `task` | checkbox widget replaces `[ ] ` source; cursor-trapped (can't navigate into hidden marker); click toggles. round-trip stable. |
 | fenced code ```` ``` ```` | ✅ | `fenced-code` | lang input + arrow nav |
 | indented code (4-space) | ❌ | — | |
 | thematic break `---` | ✅ | `hr` | |

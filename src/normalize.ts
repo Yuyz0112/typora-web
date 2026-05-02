@@ -27,6 +27,11 @@ export type DelimRange = {
   // and rendered as plain text (no decoration) when the cursor is inside.
   // Used for soft whitespace ranges inside a code fence.
   softInside?: boolean;
+  // When true, the range is hidden regardless of cursor — used for atomic
+  // markers like task-list `[ ] ` whose source is not user-editable.
+  forceHidden?: boolean;
+  // Override the default decoration class.
+  className?: string;
 };
 
 export type ExtraDecoration = {
@@ -65,10 +70,10 @@ function computePlan(doc: PMNode): {
   const delims: DelimRange[] = [];
   const extras: ExtraDecoration[] = [];
   const widgets: WidgetDecoration[] = [];
-  doc.descendants((node, pos) => {
+  doc.descendants((node, pos, parent) => {
     if (!node.isTextblock) return true;
     const text = node.textContent;
-    const spans = parseInline(text);
+    const spans = parseInline(text, parent);
     const blockStart = pos + 1;
     blocks.push({ blockPos: pos, plan: { blockStart, spans } });
     for (const s of spans) {
@@ -83,6 +88,8 @@ function computePlan(doc: PMNode): {
             spanTo,
             forceVisible: dr.forceVisible,
             softInside: dr.softInside,
+            forceHidden: dr.forceHidden,
+            className: dr.className,
           });
         }
       } else {

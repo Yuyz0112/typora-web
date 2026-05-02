@@ -31,6 +31,17 @@ const widgetBuilders: Record<string, (attrs: Record<string, string>) => HTMLElem
     if (attrs.title) img.setAttribute("title", attrs.title);
     return img;
   },
+  checkbox: (attrs) => {
+    // Task-list checkbox. data-checked stamped so test-pretty can
+    // surface state and so the click handler in the task feature can
+    // toggle it via its own DOM event listener (we don't take
+    // visible margin from the source — the gap between checkbox and
+    // text comes from `.checkbox` margin-right CSS).
+    const el = document.createElement("span");
+    el.className = "checkbox";
+    el.setAttribute("data-checked", attrs.checked === "1" ? "1" : "0");
+    return el;
+  },
   "file-input": (attrs) => {
     // Wrapping element: PM marks widgets contenteditable=false but a real
     // <input type="file"> still misbehaves inside contenteditable (focus
@@ -95,6 +106,14 @@ function buildDecorationSet(state: EditorState): DecorationSet {
   for (const d of getDelims(state)) {
     const cursorInside =
       cursor !== null && cursor >= d.spanFrom && cursor <= d.spanTo;
+    if (d.forceHidden) {
+      decos.push(
+        Decoration.inline(d.from, d.to, {
+          class: d.className ?? "syntax-hidden",
+        }),
+      );
+      continue;
+    }
     if (d.softInside) {
       // Soft range: hidden when cursor outside, plain (no decoration)
       // when cursor inside so the chars render as ordinary text.

@@ -41,10 +41,15 @@ function renderNode(n: Node): string {
   if (tag === "span") {
     if (list.contains("syntax-hint")) return `<g>${el.textContent ?? ""}</g>`;
     if (list.contains("syntax-hidden")) return ""; // delim char present in text, visually hidden
+    if (list.contains("task-marker-hidden")) return "";
     if (list.contains("play-caret")) return "|";
     if (list.contains("selection-marker")) return el.textContent ?? "";
     if (list.contains("image-icon"))
       return list.contains("broken") ? "<img-icon broken/>" : "<img-icon/>";
+    if (list.contains("checkbox"))
+      return el.getAttribute("data-checked") === "1"
+        ? "<checkbox checked/>"
+        : "<checkbox/>";
     if (list.contains("file-input")) return "<file-input/>";
   }
   if (tag === "img" && list.contains("image-render")) {

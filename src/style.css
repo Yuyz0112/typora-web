@@ -112,6 +112,45 @@ html, body { margin: 0; padding: 0; font: 16px/1.6 -apple-system, system-ui, san
   margin: 4px 0;
 }
 
+/* ── Task list checkbox ────────────────────────────────────────────── */
+/* Outer wrapper: extends the inline-block to the right with transparent
+ * padding so the native caret (which positions itself at the OUTER edge
+ * of an inline-block, not past the margin) ends up visually separated
+ * from the visible checkbox glyph. */
+.ProseMirror .checkbox-frame {
+  display: inline-block;
+  padding-right: 8px;
+  vertical-align: -2px;
+  user-select: none;
+}
+.ProseMirror .checkbox {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  vertical-align: -2px;
+  border: 1.5px solid #888;
+  border-radius: 3px;
+  background: #fff;
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+}
+.ProseMirror .checkbox[data-checked="1"] {
+  background: #7c3aed;
+  border-color: #7c3aed;
+}
+.ProseMirror .checkbox[data-checked="1"]::after {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 0px;
+  width: 4px;
+  height: 8px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
 /* Heading draft: content is bold; font-size stays at paragraph size.
  * `.heading-draft-N` is applied to the <p> via Decoration.node while the
  * cursor is inside a matching paragraph. The `# ` prefix itself wears

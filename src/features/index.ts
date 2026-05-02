@@ -17,6 +17,7 @@ import { image } from "./image.ts";
 import { link } from "./link.ts";
 import { list } from "./list.ts";
 import { strike } from "./strike.ts";
+import { task } from "./task.ts";
 
 export const ALL_FEATURES: FeatureSpec[] = [
   emphasis,
@@ -27,6 +28,8 @@ export const ALL_FEATURES: FeatureSpec[] = [
   hr,
   blockquote,
   heading,
+  // task before list so its Enter command runs first (chainCommands order).
+  task,
   list,
   fencedCode,
   autoPair,
@@ -61,6 +64,12 @@ export function collectInputRules(
 }
 export function collectBlockHandlers(): NonNullable<FeatureSpec["blockHandlers"]> {
   return Object.assign({}, ...ALL_FEATURES.map((f) => f.blockHandlers ?? {}));
+}
+export function collectInlineNodeHandlers(): NonNullable<FeatureSpec["inlineNodeHandlers"]> {
+  return Object.assign({}, ...ALL_FEATURES.map((f) => f.inlineNodeHandlers ?? {}));
+}
+export function collectParserPostProcessors(): Array<NonNullable<FeatureSpec["parserPostProcess"]>> {
+  return ALL_FEATURES.flatMap((f) => (f.parserPostProcess ? [f.parserPostProcess] : []));
 }
 // When multiple features bind the SAME key (e.g. fenced-code and list both
 // claim Enter), we chain their commands in ALL_FEATURES order: each command

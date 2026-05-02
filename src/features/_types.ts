@@ -65,6 +65,13 @@ export type FeatureSpec = {
   nodes?: Record<string, PMNodeSpec>;
   mdItPlugins?: Array<(md: MarkdownIt) => void>;
   parserTokens?: Record<string, TokenHandler>;
+  // Optional post-processor: runs once after parse() builds the doc, e.g.
+  // to fold `[ ] ` text prefixes inside list_items into task_marker nodes.
+  parserPostProcess?: (doc: PMNode) => PMNode;
+  // Inline atom-node serializers — mirror blockHandlers but for inline
+  // nodes. Called from serializer's renderInline before the default text/
+  // hard-break path.
+  inlineNodeHandlers?: Record<string, (state: import("../serializer.ts").SerializerState, node: PMNode) => void>;
   markDelims?: Record<string, SerializerMarkSpec>;
   // Block-level serializer handlers — one entry per node type the feature
   // contributes (or overrides). The core serializer has a fixed table for
@@ -100,7 +107,11 @@ export type FeatureSpec = {
 // priority is scan order (lower first). Code = 0, strike = 1, emphasis = 2.
 export type InlineFeatureSpec = {
   priority: number;
-  scan: (text: string, consumed: Uint8Array) => InlineSpan[];
+  scan: (
+    text: string,
+    consumed: Uint8Array,
+    parentBlock?: PMNode | null,
+  ) => InlineSpan[];
   markNames: string[];
   extRanges: (parent: PMNode) => Array<[number, number]>;
 };
