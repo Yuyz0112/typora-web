@@ -25,7 +25,7 @@ Status legend:
 | thematic break `---` | ✅ | `hr` | |
 | HTML block | ❌ | — | decision pending: raw vs escape |
 | YAML front matter `---\n…\n---` | ✅ | `front-matter` | Custom md-it block rule, only fires at doc start. Stored as a code-block-shaped node (text content, marks: ""). Round-trip preserves body text. Custom `<front-matter>` element to dodge `<pre>` / `<div>` tag collisions. |
-| reference link def `[id]: url` | ❌ | — | |
+| reference link def `[id]: url` | 🟡 | (md-it built-in) | md-it commonmark resolves all 3 forms (`[t][id]` / `[t][]` / `[t]`) to link tokens with resolved href; the `[id]: url` def is consumed silently. doc-level round-trip stable; **md-text collapses** — `[t][id]` + `[id]: url` serializes to `[t](url)` (the def is dropped). Phase-2 work to preserve shape: capture ref defs as nodes and add `refLabel` attr on the link mark. |
 | math block `$$…$$` | ❌ | — | Typora extension |
 | table `\| a \| b \|` | ❌ | — | GFM; biggest single block-level item |
 
@@ -44,7 +44,7 @@ Status legend:
 | empty-text link `[](url)` | ✅ | `link` | href rendered as link-styled text |
 | image `![alt](src)` | ✅ | `image` | loaded src → `<img>` always rendered as block under source; empty/broken → edit mode with file-input. async load probe; broken icon variant. round-trip stable. |
 | autolink `<https://x.com>` | ✅ | `autolink` | method-B; md-it autolink rule disabled (text flows through, scanner derives mark). URL + email; email href gets `mailto:` prefix. `<a>` tag rendering shared with `link` feature, dispatched on `data-autolink`. |
-| reference-style link `[t][id]` | ❌ | — | |
+| reference-style link `[t][id]` | 🟡 | (md-it built-in) | See "reference link def" row — same 🟡, same caveat. |
 | inline HTML | ❌ | — | |
 | hard break (2-space + `\n`) | ✅ | core | |
 | soft break (`\n` in para) | ✅ | core | |

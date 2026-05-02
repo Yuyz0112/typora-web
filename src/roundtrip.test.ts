@@ -70,6 +70,17 @@ describe("round-trip: inline marks", () => {
   test("autolink url", () => roundTripStable("see <https://example.com>"));
   test("autolink email", () => roundTripStable("mail <foo@example.com>"));
   test("link with title", () => roundTripStable('see [site](https://example.com "home")'));
+  // Reference links — doc-level round-trip stable (md-text collapses to
+  // inline form on serialize; the link mark carries the resolved href so
+  // re-parsing yields the same doc).
+  test("reference link full", () =>
+    roundTripStable("[ref][1]\n\n[1]: https://example.com"));
+  test("reference link collapsed", () =>
+    roundTripStable("[ref][]\n\n[ref]: https://example.com"));
+  test("reference link shortcut", () =>
+    roundTripStable("[ref]\n\n[ref]: https://example.com"));
+  test("reference link with title", () =>
+    roundTripStable('[ref][1]\n\n[1]: https://example.com "home"'));
   test("image", () => roundTripStable("![alt](https://example.com/x.png)"));
   test("image with title", () =>
     roundTripStable('![alt](https://example.com/x.png "caption")'));
