@@ -64,7 +64,7 @@ function renderNode(n: Node): string {
   // Emoji autocomplete dropdown — collapsed to a self-closing tag in
   // pretty since the option list is dynamic and not the focus of the
   // assertion (presence/absence is what we test).
-  if (tag === "select" && list.contains("emoji-completion")) return "<select />";
+  if (list.contains("emoji-completion")) return "<select />";
 
   const children = Array.from(el.childNodes).map(renderNode).join("");
 

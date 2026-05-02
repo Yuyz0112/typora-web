@@ -1,8 +1,11 @@
 import { Plugin, PluginKey, TextSelection } from "prosemirror-state";
-import { Decoration, DecorationSet } from "prosemirror-view";
+import type { EditorState } from "prosemirror-state";
+import { Decoration, DecorationSet, type EditorView } from "prosemirror-view";
 
 import { markConsumed, type InlineSpan } from "../inline-parse.ts";
 import type { FeatureSpec, InlineFeatureSpec } from "./_types.ts";
+
+import emojiData from "markdown-it-emoji/lib/data/full.mjs";
 
 // Emoji `:name:` — Typora-style. The source `:name:` lives verbatim in
 // the textblock text (so md round-trip is automatic). A widget decoration
@@ -16,28 +19,10 @@ import type { FeatureSpec, InlineFeatureSpec } from "./_types.ts";
 //   😄<g>:smile:</g>|   — closing colon lands; cursor inside surrounding span
 //   😄 |                — cursor moved past, source hidden, glyph stays
 
-// Hand-curated subset; the registry is just a Record so new names are
-// one-line additions. Full lists (`markdown-it-emoji`) can be wired in
-// later if we ever need thousands of names.
-const EMOJI: Record<string, string> = {
-  smile: "😄",
-  joy: "😂",
-  cry: "😢",
-  cool: "😎",
-  thinking: "🤔",
-  eyes: "👀",
-  heart: "❤️",
-  fire: "🔥",
-  tada: "🎉",
-  rocket: "🚀",
-  bug: "🐛",
-  warning: "⚠️",
-  sparkles: "✨",
-  white_check_mark: "✅",
-  x: "❌",
-  "+1": "👍",
-  "-1": "👎",
-};
+// Sourced from markdown-it-emoji's full registry (~1500 GitHub-style
+// names). Kept as a typed Record for the rest of the file.
+const EMOJI = emojiData as Record<string, string>;
+const ALL_NAMES = Object.keys(EMOJI).sort();
 
 // :name: where name is alphanum + a few safe punct chars. Lazy match so
 // `:a:b:` resolves to `:a:` followed by stray `:b:` rather than spanning.
@@ -93,34 +78,73 @@ const scan: InlineFeatureSpec["scan"] = (text, consumed) => {
 
 // ─── Autocomplete dropdown ────────────────────────────────────────────────
 //
-// While the user is typing `:partial` (no closing colon yet), show a small
-// dropdown of matching names. Detection is selection-driven: every state
-// transition we look at the chars before the cursor inside the current
-// textblock and match against `\B:([a-z0-9_+\-]+)$`. If the partial has
-// at least one char and matches at least one known name, we open the
-// dropdown.
+// While the user is typing `:partial` (no closing colon yet), open a
+// floating list of matching names. Detection is selection-driven: every
+// state transition we look at the chars before the cursor inside the
+// current textblock and match `\B:[a-z0-9_+\-]+$`. If at least one known
+// name starts with the partial, the dropdown opens.
 //
-// Commit (Tab / Enter) replaces `:partial` with `:name:` + a trailing
-// space, then closes the dropdown. The closing `:` lands first which
-// causes the inline scanner to mark the span — the user sees the glyph
-// appear immediately. Escape closes without committing.
+// The popup is a Decoration.widget at the cursor position so it lives
+// in the same DOM tree (test-pretty can see it). Visually it's
+// `position: absolute` and gets placed below the cursor by the plugin's
+// view-update hook (`view.coordsAtPos` → editor-relative top/left).
+//
+// Selected index is plugin state. Up/Down move it, Enter/Tab commit,
+// Escape closes. Click on a row commits its name. The committed text is
+// `:name: ` (trailing space) — the closing colon trips the inline
+// scanner, the space pushes the cursor past the span so the source hides.
 
 const PARTIAL_RE = /\B:([a-z0-9_+\-]+)$/;
+const MAX_VISIBLE = 8;
 
 type AutoState = {
   open: boolean;
   partial: string;
   matches: string[];
+  selected: number;
+  // dismissed: user pressed Escape — keep popup closed until partial
+  // changes (text edit) or the cursor leaves the partial region.
+  dismissedFor: string;
   // Absolute doc positions of `:` (from) and the cursor (to).
   from: number;
   to: number;
 };
 
-const CLOSED: AutoState = { open: false, partial: "", matches: [], from: 0, to: 0 };
+const CLOSED: AutoState = {
+  open: false,
+  partial: "",
+  matches: [],
+  selected: 0,
+  dismissedFor: "",
+  from: 0,
+  to: 0,
+};
 
 const autoKey = new PluginKey<AutoState>("emoji-autocomplete");
 
-function computeAutoState(state: import("prosemirror-state").EditorState): AutoState {
+type AutoMeta =
+  | { type: "select"; index: number }
+  | { type: "dismiss" };
+
+function findMatches(partial: string): string[] {
+  // Two-pass score: prefix matches first (alphabetical), then substring
+  // matches. Cap at MAX_VISIBLE so the popup stays small.
+  const out: string[] = [];
+  for (const n of ALL_NAMES) {
+    if (n.startsWith(partial)) out.push(n);
+    if (out.length >= MAX_VISIBLE) return out;
+  }
+  if (out.length < MAX_VISIBLE) {
+    for (const n of ALL_NAMES) {
+      if (out.includes(n)) continue;
+      if (n.includes(partial)) out.push(n);
+      if (out.length >= MAX_VISIBLE) break;
+    }
+  }
+  return out;
+}
+
+function computeAutoState(state: EditorState, prev: AutoState): AutoState {
   const sel = state.selection;
   if (!sel.empty) return CLOSED;
   const $pos = sel.$from;
@@ -129,29 +153,30 @@ function computeAutoState(state: import("prosemirror-state").EditorState): AutoS
   const m = PARTIAL_RE.exec(text);
   if (!m) return CLOSED;
   const partial = m[1]!;
-  const matches = Object.keys(EMOJI)
-    .filter((n) => n.startsWith(partial))
-    .sort();
+  // Suppress the popup if the user dismissed it for this exact partial.
+  if (prev.dismissedFor === partial) {
+    return { ...CLOSED, dismissedFor: partial };
+  }
+  const matches = findMatches(partial);
   if (matches.length === 0) return CLOSED;
-  const blockStart = $pos.start();
   const cursor = $pos.pos;
+  // Preserve selected index when partial unchanged and selected still in
+  // range; otherwise reset to 0.
+  const sameSearch =
+    prev.open && prev.partial === partial && prev.matches.length === matches.length;
+  const selected = sameSearch ? Math.min(prev.selected, matches.length - 1) : 0;
   return {
     open: true,
     partial,
     matches,
+    selected,
+    dismissedFor: "",
     from: cursor - partial.length - 1, // points at `:`
     to: cursor,
   };
 }
 
-function commit(
-  view: import("prosemirror-view").EditorView,
-  name: string,
-  s: AutoState,
-): void {
-  // Replace `:partial` with `:name:` plus a trailing space. The space is
-  // what triggers the cursor to leave the surrounding span so the source
-  // hides — matches the manual flow (`:smile:` then space).
+function commit(view: EditorView, name: string, s: AutoState): void {
   const replacement = `:${name}: `;
   const tr = view.state.tr.insertText(replacement, s.from, s.to);
   const newPos = s.from + replacement.length;
@@ -163,73 +188,129 @@ function emojiAutocompletePlugin(): Plugin<AutoState> {
   return new Plugin<AutoState>({
     key: autoKey,
     state: {
-      init: (_, state) => computeAutoState(state),
-      apply: (_tr, _prev, _oldState, newState) => computeAutoState(newState),
+      init: (_, state) => computeAutoState(state, CLOSED),
+      apply(tr, prev, _oldState, newState) {
+        const meta = tr.getMeta(autoKey) as AutoMeta | undefined;
+        if (meta?.type === "select") {
+          if (!prev.open) return prev;
+          const max = prev.matches.length - 1;
+          const next = Math.max(0, Math.min(max, meta.index));
+          return { ...prev, selected: next };
+        }
+        if (meta?.type === "dismiss") {
+          return { ...CLOSED, dismissedFor: prev.partial };
+        }
+        return computeAutoState(newState, prev);
+      },
     },
     props: {
       decorations(state) {
         const s = autoKey.getState(state);
         if (!s?.open) return DecorationSet.empty;
-        const pop = buildDropdown(s);
+        // Re-create the widget DOM only when the rendered shape would
+        // change — `key` lets PM dedupe across transactions.
+        const el = buildDropdown(s);
         return DecorationSet.create(state.doc, [
-          Decoration.widget(s.to, pop, {
+          Decoration.widget(s.to, el, {
             side: 1,
-            key: `emoji-auto@${s.to}:${s.partial}`,
+            key: `emoji-auto@${s.partial}@${s.selected}`,
             ignoreSelection: true,
+            stopEvent: () => true,
           }),
         ]);
       },
       handleKeyDown(view, e) {
         const s = autoKey.getState(view.state);
         if (!s?.open) return false;
-        if (e.key === "Escape") {
-          // Move the cursor by 0 to force a tx that re-runs apply; the
-          // partial pattern still matches so this only buys us an
-          // "ignore until partial changes" if we add an explicit
-          // dismissed flag. For pilot, just re-render same — keeping
-          // Escape as a no-op is acceptable.
-          return false;
+        if (e.key === "ArrowDown") {
+          view.dispatch(
+            view.state.tr.setMeta(autoKey, { type: "select", index: s.selected + 1 } as AutoMeta),
+          );
+          e.preventDefault();
+          return true;
         }
-        if (e.key === "Tab" || e.key === "Enter") {
-          const name = s.matches[0];
+        if (e.key === "ArrowUp") {
+          view.dispatch(
+            view.state.tr.setMeta(autoKey, { type: "select", index: s.selected - 1 } as AutoMeta),
+          );
+          e.preventDefault();
+          return true;
+        }
+        if (e.key === "Enter" || e.key === "Tab") {
+          const name = s.matches[s.selected];
           if (!name) return false;
           commit(view, name, s);
+          e.preventDefault();
+          return true;
+        }
+        if (e.key === "Escape") {
+          view.dispatch(view.state.tr.setMeta(autoKey, { type: "dismiss" } as AutoMeta));
           e.preventDefault();
           return true;
         }
         return false;
       },
     },
+    // Position the popup below the cursor after every update. PM
+    // `coordsAtPos` returns viewport coords; convert to editor-relative
+    // since the popup's offset parent is `.ProseMirror` (CSS sets it
+    // `position: relative`).
+    view(view) {
+      const reposition = () => {
+        const s = autoKey.getState(view.state);
+        if (!s?.open) return;
+        const el = view.dom.querySelector<HTMLElement>(".emoji-completion");
+        if (!el) return;
+        const coords = view.coordsAtPos(s.to);
+        const editorRect = view.dom.getBoundingClientRect();
+        el.style.top = `${coords.bottom - editorRect.top + 2}px`;
+        el.style.left = `${coords.left - editorRect.left}px`;
+        // Ensure the selected row is in view (when count > visible).
+        const sel = el.querySelector<HTMLElement>(".emoji-completion-row.selected");
+        sel?.scrollIntoView({ block: "nearest" });
+      };
+      reposition();
+      return {
+        update() {
+          reposition();
+        },
+      };
+    },
   });
 }
 
 function buildDropdown(s: AutoState): HTMLElement {
-  // Rendered as <select> so test-pretty can map it to the user's
-  // `<select />` shorthand. contenteditable=false so PM doesn't try to
-  // route input into the popup.
-  const el = document.createElement("select");
-  el.className = "emoji-completion";
-  el.setAttribute("contenteditable", "false");
-  for (const name of s.matches.slice(0, 8)) {
-    const opt = document.createElement("option");
-    opt.value = name;
-    opt.textContent = `${EMOJI[name]} :${name}:`;
-    el.appendChild(opt);
+  const root = document.createElement("div");
+  root.className = "emoji-completion";
+  root.setAttribute("contenteditable", "false");
+  // Stop PM from treating clicks/mousedowns as editor input — without
+  // this the editor steals focus before our click handler fires.
+  root.addEventListener("mousedown", (e) => e.preventDefault());
+  for (let i = 0; i < s.matches.length; i++) {
+    const name = s.matches[i]!;
+    const row = document.createElement("div");
+    row.className = "emoji-completion-row";
+    if (i === s.selected) row.classList.add("selected");
+    row.dataset.name = name;
+    const glyph = document.createElement("span");
+    glyph.className = "emoji-completion-glyph";
+    glyph.textContent = EMOJI[name] ?? "";
+    const label = document.createElement("span");
+    label.className = "emoji-completion-name";
+    label.textContent = `:${name}:`;
+    row.appendChild(glyph);
+    row.appendChild(label);
+    row.addEventListener("click", () => {
+      root.dispatchEvent(
+        new CustomEvent("emoji-autocomplete-pick", {
+          bubbles: true,
+          detail: { name },
+        }),
+      );
+    });
+    root.appendChild(row);
   }
-  // Click a list item → commit. (Bubbles up via a custom event so the
-  // plugin can dispatch from within the EditorView. Same pattern used
-  // elsewhere for the file-input widget.)
-  el.addEventListener("mousedown", (e) => e.preventDefault());
-  el.addEventListener("change", (e) => {
-    const target = e.target as HTMLSelectElement;
-    el.dispatchEvent(
-      new CustomEvent("emoji-autocomplete-pick", {
-        bubbles: true,
-        detail: { name: target.value },
-      }),
-    );
-  });
-  return el;
+  return root;
 }
 
 export const emoji: FeatureSpec = {
