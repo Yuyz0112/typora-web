@@ -61,7 +61,7 @@ Status legend:
 | inline math `$x$` | ❌ | |
 | math block `$$…$$` | ❌ | |
 | TOC `[toc]` | ❌ | |
-| emoji `:smile:` | 🟡 | `emoji`; pure-decoration approach (widget renders glyph, source chars hidden when cursor outside). Hand-curated subset of names. **Pending**: autocomplete dropdown while typing partial `:xxx`. |
+| emoji `:smile:` | ✅ | `emoji`; widget renders glyph, source chars hidden when cursor outside. Autocomplete dropdown opens while typing `:partial`; Tab/Enter commits the first match. Hand-curated subset of names. |
 | diagram fences (mermaid, flow, …) | ❌ | extends `fenced-code` via lang routing |
 | HTML comment `<!-- -->` | ✅ | `html-comment`; method-B mark wrapping the whole `<!-- ... -->` source. md-it `html: false` already lets it flow through as text. Always visible (gray italic), no cursor-aware show/hide. |
 
