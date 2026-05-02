@@ -272,7 +272,18 @@ const coreBlockHandlers: Record<string, BlockHandler> = {
   },
 
   heading: (state, node) => {
-    state.write(`${"#".repeat(node.attrs.level as number)} `);
+    const level = node.attrs.level as number;
+    const style = node.attrs.style as string;
+    if (style === "setext" && (level === 1 || level === 2)) {
+      // setext: content on one line, underline of `=`/`-` (3 chars,
+      // canonical) on the next. Only valid for h1/h2 — higher levels
+      // fall through to ATX.
+      state.renderInline(node);
+      state.write(`\n${level === 1 ? "===" : "---"}`);
+      state.closeBlock(node);
+      return;
+    }
+    state.write(`${"#".repeat(level)} `);
     state.renderInline(node);
     state.closeBlock(node);
   },

@@ -15,7 +15,10 @@ const coreNodes: Record<string, NodeSpec> = {
   heading: {
     group: "block",
     content: "inline*",
-    attrs: { level: { default: 1 } },
+    // style: "atx" → `# H`, "setext" → `H\n===` (level 1) / `H\n---` (level 2).
+    // Captured at parse time from markdown-it's `markup` token field; new
+    // headings created via input rule default to "atx".
+    attrs: { level: { default: 1 }, style: { default: "atx" } },
     defining: true,
     parseDOM: [1, 2, 3, 4, 5, 6].map((level) => ({
       tag: `h${level}`,

@@ -22,6 +22,10 @@ describe("round-trip: blocks", () => {
   test("multiple paragraphs", () => roundTripStable("one\n\ntwo\n\nthree"));
   test("all heading levels", () =>
     roundTripStable("# h1\n\n## h2\n\n### h3\n\n#### h4\n\n##### h5\n\n###### h6"));
+  test("setext h1", () => roundTripStable("Heading 1\n==="));
+  test("setext h2", () => roundTripStable("Heading 2\n---"));
+  test("setext mixed with atx", () =>
+    roundTripStable("Title\n===\n\n## Sub\n\nBody"));
   test("blockquote single paragraph", () => roundTripStable("> quoted text"));
   test("blockquote multi paragraph", () => roundTripStable("> first\n>\n> second"));
   test("horizontal rule", () => roundTripStable("before\n\n---\n\nafter"));

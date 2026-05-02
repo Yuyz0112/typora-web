@@ -56,9 +56,11 @@ root.innerHTML = `
     <div class="controls">
       <strong>Free editor</strong>
       <button id="free-clear">Clear</button>
+      <button id="free-source-toggle">Source mode <kbd>⌘/</kbd></button>
       <span class="hint">type anything; pretty / md update live</span>
     </div>
     <div class="pane pane-editor" id="free-editor"></div>
+    <textarea id="free-source" class="pane pane-editor source-textarea" hidden></textarea>
     <div class="free-dumps">
       <details class="dump" open>
         <summary>pretty() snapshot <button class="copy-btn" data-copy="free-pretty-dump">copy</button></summary>
@@ -251,6 +253,80 @@ $freeClear.addEventListener("click", () => {
   freeView.destroy();
   $freeEditor.innerHTML = "";
   freeView = mountFreeEditor();
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Source mode toggle (free editor only). ⌘/ (or Ctrl+/ on non-Mac) swaps the
+// PM editor with a plain textarea showing serialize(doc). Edits in the
+// textarea round-trip back into a fresh PM state on toggle off. This is
+// the only way to author syntaxes whose live editor surface differs from
+// the source (e.g. setext heading: parser-only, no input rule).
+// ─────────────────────────────────────────────────────────────────────────────
+
+const $freeSource = document.getElementById("free-source") as HTMLTextAreaElement;
+const $freeSourceToggle = document.getElementById("free-source-toggle") as HTMLButtonElement;
+let inSourceMode = false;
+
+function enterSourceMode(): void {
+  $freeSource.value = serialize(freeView.state.doc);
+  $freeEditor.hidden = true;
+  $freeSource.hidden = false;
+  $freeSource.focus();
+  inSourceMode = true;
+  $freeSourceToggle.classList.add("active");
+}
+
+function exitSourceMode(): void {
+  const md = $freeSource.value;
+  freeView.destroy();
+  $freeEditor.innerHTML = "";
+  const doc = md ? parse(md) : schema.nodes.doc.createAndFill()!;
+  const state = EditorState.create({
+    schema,
+    doc,
+    plugins: defaultPlugins({ cursorWidget: false }),
+  });
+  freeView = new EditorView($freeEditor, {
+    state,
+    dispatchTransaction(tr) {
+      const next = freeView.state.apply(tr);
+      freeView.updateState(next);
+      $freePretty.textContent = pretty(next);
+      $freeMd.textContent = serialize(next.doc);
+    },
+  });
+  $freePretty.textContent = pretty(state);
+  $freeMd.textContent = serialize(state.doc);
+  $freeSource.hidden = true;
+  $freeEditor.hidden = false;
+  freeView.focus();
+  inSourceMode = false;
+  $freeSourceToggle.classList.remove("active");
+}
+
+function toggleSourceMode(): void {
+  if (inSourceMode) exitSourceMode();
+  else enterSourceMode();
+}
+
+$freeSourceToggle.addEventListener("click", toggleSourceMode);
+
+// Global ⌘/ (Cmd+/ on Mac, Ctrl+/ elsewhere). We use a window-level keydown
+// because the textarea isn't a PM view, so PM's keymap doesn't reach it.
+window.addEventListener("keydown", (e) => {
+  if (e.key !== "/") return;
+  const isMac = /Mac/.test(navigator.platform);
+  if (!(isMac ? e.metaKey : e.ctrlKey)) return;
+  if (e.shiftKey || e.altKey) return;
+  // Only fire when focus is inside the free editor / source textarea —
+  // otherwise this swallows ⌘/ for the case-card editors too.
+  const target = e.target as Element | null;
+  if (!target) return;
+  const insideFree =
+    $freeEditor.contains(target) || target === $freeSource;
+  if (!insideFree) return;
+  e.preventDefault();
+  toggleSourceMode();
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

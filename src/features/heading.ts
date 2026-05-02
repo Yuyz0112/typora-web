@@ -214,6 +214,41 @@ export const heading: FeatureSpec = {
       ],
     },
 
+    // ─── setext ───────────────────────────────────────────────────────
+    // Typora doesn't auto-convert paragraph + `===` on Enter (we tested
+    // and confirmed). setext is an *input* format only: parser recognises
+    // it, serializer preserves it via the `style` attr. Pretty doesn't
+    // distinguish atx/setext — both render <h1>x</h1> — so attr survival
+    // is verified by roundtrip.test.ts (`doc1.eq(doc2)` checks attrs).
+    {
+      id: "parse-setext-h1",
+      label: "seed `Heading\\n===` parses to <h1>",
+      seed: "Heading\n===",
+      events: [],
+      checkpoints: [
+        { at: 0, expect: "<h1>Heading|</h1>" },
+      ],
+    },
+    {
+      id: "parse-setext-h2",
+      label: "seed `Heading\\n---` parses to <h2> (not hr, since preceding text)",
+      seed: "Heading\n---",
+      events: [],
+      checkpoints: [
+        { at: 0, expect: "<h2>Heading|</h2>" },
+      ],
+    },
+    {
+      id: "edit-setext-keeps-shape",
+      label: "typing into a setext h1 keeps it heading",
+      seed: "Heading\n===",
+      events: ["x"],
+      checkpoints: [
+        { at: 0, expect: "<h1>Heading|</h1>" },
+        { at: 1, expect: "<h1>Headingx|</h1>" },
+      ],
+    },
+
     // Two previously SKIPPED cases are removed because `runFeatureCases`
     // can't describe-without-tests cleanly:
     //   - rendered-reentry-stays-rendered (needs seed → rendered heading

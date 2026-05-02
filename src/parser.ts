@@ -125,9 +125,18 @@ function handleBlock(state: ParserState, token: Token): void {
     case "paragraph_close":
       state.closeNode();
       return;
-    case "heading_open":
-      state.openNode(nodes.heading, { level: Number(token.tag.slice(1)) });
+    case "heading_open": {
+      // markdown-it sets token.markup to "#"/"##"/... for ATX and "="/"-"
+      // for setext (lheading). We capture it as a `style` attr so the
+      // serializer can emit the same shape on round-trip.
+      const markup = token.markup;
+      const style = markup === "=" || markup === "-" ? "setext" : "atx";
+      state.openNode(nodes.heading, {
+        level: Number(token.tag.slice(1)),
+        style,
+      });
       return;
+    }
     case "heading_close":
       state.closeNode();
       return;

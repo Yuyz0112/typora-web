@@ -15,6 +15,27 @@ html, body { margin: 0; padding: 0; font: 16px/1.6 -apple-system, system-ui, san
 }
 .controls button:hover:not(:disabled) { background: #f0f0f0; }
 .controls button:disabled { opacity: 0.4; cursor: not-allowed; }
+.controls button.active { background: #ede9fe; border-color: #7c3aed; color: #7c3aed; }
+.controls kbd {
+  font: 11px ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: #f4f4f4; border: 1px solid #ddd; border-radius: 3px;
+  padding: 1px 4px; margin-left: 4px;
+}
+
+.source-textarea {
+  width: 100%;
+  min-height: 168px;
+  resize: vertical;
+  font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #222;
+  box-sizing: border-box;
+  white-space: pre;
+  tab-size: 2;
+}
+/* The `hidden` HTML attribute uses `display: none` by default; some
+ * browsers' UA stylesheets give textarea a higher specificity rule.
+ * Force it explicitly so toggling via the attribute Just Works. */
+[hidden] { display: none !important; }
 .controls select, .controls input[type="range"] { font: inherit; }
 
 .meta {
