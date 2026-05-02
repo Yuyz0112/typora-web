@@ -76,6 +76,13 @@ html, body { margin: 0; padding: 0; font: 16px/1.6 -apple-system, system-ui, san
 .ProseMirror .syntax-hidden {
   font-size: 0;
 }
+/* HTML comment — wraps the entire `<!-- ... -->` source. The chars stay
+ * visible (no decoration hides them) and the wrapper just dims them so
+ * the user can tell at a glance that this is a comment. */
+.ProseMirror mark-comment {
+  color: #999;
+  font-style: italic;
+}
 .ProseMirror .play-caret {
   display: inline-block;
   width: 2px;

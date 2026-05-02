@@ -63,7 +63,7 @@ Status legend:
 | TOC `[toc]` | ❌ | |
 | emoji `:smile:` | ❌ | |
 | diagram fences (mermaid, flow, …) | ❌ | extends `fenced-code` via lang routing |
-| HTML comment `<!-- -->` | ❌ | |
+| HTML comment `<!-- -->` | ✅ | `html-comment`; method-B mark wrapping the whole `<!-- ... -->` source. md-it `html: false` already lets it flow through as text. Always visible (gray italic), no cursor-aware show/hide. |
 
 ## Editor behaviors (non-syntax)
 

@@ -15,6 +15,7 @@ import { fencedCode } from "./fenced-code.ts";
 import { heading } from "./heading.ts";
 import { highlight } from "./highlight.ts";
 import { hr } from "./hr.ts";
+import { htmlComment } from "./html-comment.ts";
 import { image } from "./image.ts";
 import { link } from "./link.ts";
 import { list } from "./list.ts";
@@ -23,6 +24,7 @@ import { subSup } from "./sub-sup.ts";
 import { task } from "./task.ts";
 
 export const ALL_FEATURES: FeatureSpec[] = [
+  htmlComment,
   emphasis,
   code,
   strike,

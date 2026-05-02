@@ -69,6 +69,8 @@ describe("round-trip: inline marks", () => {
     roundTripStable('![alt](https://example.com/x.png "caption")'));
   test("image empty alt", () => roundTripStable("![](https://example.com/x.png)"));
   test("hard break", () => roundTripStable("line a  \nline b"));
+  test("html comment", () => roundTripStable("before <!-- a note --> after"));
+  test("html comment empty", () => roundTripStable("<!---->"));
   test("soft break (newline in paragraph)", () => roundTripStable("line a\nline b"));
 });
 
