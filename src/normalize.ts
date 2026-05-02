@@ -142,8 +142,12 @@ export function normalizeInlinePlugin(): Plugin<NormalizeState> {
       },
     },
 
-    appendTransaction(transactions, _oldState, newState) {
-      if (!transactions.some((t) => t.docChanged)) return null;
+    appendTransaction(_transactions, _oldState, newState) {
+      // No `docChanged` guard: parsed-from-seed docs arrive with marks
+      // missing (the parser leaves text raw for method-B), and the very
+      // first tx (setSelection in setup) wouldn't trip a docChanged
+      // check. The per-mark diff below is the authoritative bail-out —
+      // when target marks already equal current, nothing dispatches.
       const { blocks } = computePlan(newState.doc);
       const tr = newState.tr;
       const managedNames = collectInlineFeatures().flatMap((f) => f.markNames);

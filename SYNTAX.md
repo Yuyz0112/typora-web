@@ -43,7 +43,7 @@ Status legend:
 | link with title `[t](u "title")` | ✅ | `link` | |
 | empty-text link `[](url)` | ✅ | `link` | href rendered as link-styled text |
 | image `![alt](src)` | ✅ | `image` | loaded src → `<img>` always rendered as block under source; empty/broken → edit mode with file-input. async load probe; broken icon variant. round-trip stable. |
-| autolink `<https://x.com>` | ⏸️ | — | deferred per pilot scope |
+| autolink `<https://x.com>` | ✅ | `autolink` | method-B; md-it autolink rule disabled (text flows through, scanner derives mark). URL + email; email href gets `mailto:` prefix. `<a>` tag rendering shared with `link` feature, dispatched on `data-autolink`. |
 | reference-style link `[t][id]` | ❌ | — | |
 | inline HTML | ❌ | — | |
 | hard break (2-space + `\n`) | ✅ | core | |

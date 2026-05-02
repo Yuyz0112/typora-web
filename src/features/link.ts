@@ -135,8 +135,13 @@ export const link: FeatureSpec = {
   },
 
   renderCases: {
+    // Single owner for the `<a>` tag — both link and autolink emit `<a>`,
+    // and renderCases is a tag→handler map so we'd otherwise collide.
+    // Dispatch on `data-autolink` (set by autolink's toDOM): autolink
+    // → <a:url>...</a>, regular link → <l:url>...</l>.
     a: (children, el) => {
       const href = el.getAttribute("href") ?? "";
+      if (el.hasAttribute("data-autolink")) return `<a:${href}>${children}</a>`;
       return `<l:${href}>${children}</l>`;
     },
   },

@@ -7,6 +7,7 @@ import type { Schema } from "prosemirror-model";
 
 import type { Case, FeatureSpec, InlineFeatureSpec } from "./_types.ts";
 import { autoPair } from "./auto-pair.ts";
+import { autolink } from "./autolink.ts";
 import { blockquote } from "./blockquote.ts";
 import { code } from "./code.ts";
 import { emphasis } from "./emphasis.ts";
@@ -25,6 +26,7 @@ export const ALL_FEATURES: FeatureSpec[] = [
   code,
   strike,
   highlight,
+  autolink,
   link,
   image,
   hr,
