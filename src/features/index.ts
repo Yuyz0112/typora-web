@@ -23,6 +23,7 @@ import { list } from "./list.ts";
 import { strike } from "./strike.ts";
 import { subSup } from "./sub-sup.ts";
 import { task } from "./task.ts";
+import { toc } from "./toc.ts";
 
 export const ALL_FEATURES: FeatureSpec[] = [
   htmlComment,
@@ -42,6 +43,7 @@ export const ALL_FEATURES: FeatureSpec[] = [
   task,
   list,
   fencedCode,
+  toc,
   autoPair,
 ];
 

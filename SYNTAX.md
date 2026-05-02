@@ -60,7 +60,7 @@ Status legend:
 | superscript `^x^` | ✅ | `sub-sup`; method-B. `^` doesn't collide with anything else. |
 | inline math `$x$` | ❌ | |
 | math block `$$…$$` | ❌ | |
-| TOC `[toc]` | ❌ | |
+| TOC `[toc]` | ✅ | `toc`; atom block node; NodeView walks doc to render heading tree, refresh plugin re-renders on every transaction. Enter on a paragraph whose text is exactly `[toc]` / `[TOC]` converts. Click on entry → scroll to heading. |
 | emoji `:smile:` | ✅ | `emoji`; widget renders glyph, source chars hidden when cursor outside. Autocomplete dropdown opens while typing `:partial`; Tab/Enter commits the first match. Hand-curated subset of names. |
 | diagram fences (mermaid, flow, …) | ❌ | extends `fenced-code` via lang routing |
 | HTML comment `<!-- -->` | ✅ | `html-comment`; method-B mark wrapping the whole `<!-- ... -->` source. md-it `html: false` already lets it flow through as text. Always visible (gray italic), no cursor-aware show/hide. |

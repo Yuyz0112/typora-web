@@ -84,6 +84,32 @@ html, body { margin: 0; padding: 0; font: 16px/1.6 -apple-system, system-ui, san
   font-style: italic;
 }
 
+/* TOC — atomic block; cursor can't enter (NodeView is contenteditable=
+ * false), entries are dim links that scroll-to on click. List indent
+ * encodes heading depth. */
+.ProseMirror .toc {
+  border: 1px solid #e3e3e3;
+  border-radius: 6px;
+  padding: 8px 14px;
+  margin: 8px 0;
+  background: #fafafa;
+  font-size: 0.95em;
+}
+.ProseMirror .toc-empty { color: #999; font-style: italic; }
+.ProseMirror .toc-list { list-style: none; padding: 0; margin: 0; }
+.ProseMirror .toc-item {
+  cursor: pointer;
+  padding: 2px 0;
+  color: #555;
+}
+.ProseMirror .toc-item:hover { color: #7c3aed; text-decoration: underline; }
+.ProseMirror .toc-h1 { padding-left: 0; font-weight: 600; }
+.ProseMirror .toc-h2 { padding-left: 1.2em; }
+.ProseMirror .toc-h3 { padding-left: 2.4em; }
+.ProseMirror .toc-h4 { padding-left: 3.6em; }
+.ProseMirror .toc-h5 { padding-left: 4.8em; }
+.ProseMirror .toc-h6 { padding-left: 6em; }
+
 /* Emoji autocomplete dropdown — floating below the cursor. The widget
  * is mounted inline (so test-pretty sees it) but visually positioned
  * via `position: fixed` (viewport coords). The plugin's view-update
