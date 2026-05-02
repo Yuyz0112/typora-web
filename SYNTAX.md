@@ -55,7 +55,7 @@ Status legend:
 
 | Syntax | Status | Notes |
 |---|---|---|
-| highlight `==x==` | ❌ | |
+| highlight `==x==` | ✅ | method-B; same shape as strike (no md-it rule needed — text flows through, normalize derives mark) |
 | subscript `~x~` | ❌ | conflicts with strike `~~` — needs disambiguation |
 | superscript `^x^` | ❌ | |
 | inline math `$x$` | ❌ | |

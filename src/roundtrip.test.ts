@@ -49,6 +49,8 @@ describe("round-trip: lists", () => {
 
 describe("round-trip: inline marks", () => {
   test("strong", () => roundTripStable("**bold**"));
+  test("highlight", () => roundTripStable("==marked=="));
+  test("highlight with spaces", () => roundTripStable("a ==hello world== b"));
   test("em", () => roundTripStable("*italic*"));
   test("strong (underscore)", () => roundTripStable("__bold__"));
   test("em (underscore)", () => roundTripStable("_italic_"));
