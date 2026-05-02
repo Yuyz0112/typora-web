@@ -72,7 +72,7 @@ export const hr: FeatureSpec = {
       checkpoints: [
         { at: 1, expect: "a\n|" },
         { at: 4, expect: "a\n<g>---</g>|" },
-        { at: 5, expect: "a\n---\n|" },
+        { at: 5, expect: "a\n<hr/>\n|" },
       ],
     },
     {
@@ -82,7 +82,7 @@ export const hr: FeatureSpec = {
       events: ["*", "*", "*", "<Enter>"],
       checkpoints: [
         { at: 3, expect: "<g>***</g>|" },
-        { at: 4, expect: "---\n|" },
+        { at: 4, expect: "<hr/>\n|" },
       ],
     },
     {
@@ -92,7 +92,7 @@ export const hr: FeatureSpec = {
       events: ["_", "_", "_", "<Enter>"],
       checkpoints: [
         { at: 3, expect: "<g>___</g>|" },
-        { at: 4, expect: "---\n|" },
+        { at: 4, expect: "<hr/>\n|" },
       ],
     },
     {

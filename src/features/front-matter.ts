@@ -301,7 +301,7 @@ export const frontMatter: FeatureSpec = {
       seed: "---\n\nbody",
       events: [],
       checkpoints: [
-        { at: 0, expect: "---\nbody|" },
+        { at: 0, expect: "<hr/>\nbody|" },
       ],
     },
     {

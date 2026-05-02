@@ -87,7 +87,10 @@ function renderNode(n: Node): string {
     case "br":
       return "<br/>";
     case "hr":
-      return "---";
+      // Self-closing tag matches the convention used by other block
+      // markers (<toc/>, <yaml-block .../>); avoids collision with a
+      // paragraph whose text happens to be `---`.
+      return "<hr/>";
     case "blockquote":
       // Same ambiguity fix as headings: a paragraph whose text starts
       // with `> ` would pretty-render identically to an actual

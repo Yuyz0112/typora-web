@@ -119,7 +119,7 @@ For marks that don't fit the delim-pair shape, see `link.ts` — its `scan` is a
 | `<g>*</g>`, `<g>**</g>`, `` <g>`</g> ``, `<g>~~</g>`, `<g>[</g>` / `<g>](href)</g>` | gray source delimiter shown when the cursor is inside the mark's surrounding span |
 | `|` | empty-selection caret |
 | `[…]` | non-empty selection |
-| `# `, `- `, `1. `, `> `, ```\`\`\`lang\n…\n\`\`\` ```, `---`, `<br/>` | block / inline structure |
+| `# `, `- `, `1. `, `> `, ```\`\`\`lang\n…\n\`\`\` ```, `<hr/>`, `<br/>`, `<toc/>`, `<yaml-block content="…" />`, `<comment>…</comment>`, `<a:url>…</a>`, `<mark>…</mark>`, `<sub>…</sub>`, `<sup>…</sup>` | block / inline structure markers |
 
 ### Event DSL
 
