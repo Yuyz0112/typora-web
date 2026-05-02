@@ -84,6 +84,19 @@ html, body { margin: 0; padding: 0; font: 16px/1.6 -apple-system, system-ui, san
   font-style: italic;
 }
 
+/* YAML front matter — code-block-like display at doc start. */
+.ProseMirror front-matter {
+  display: block;
+  white-space: pre;
+  font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: #fdf6e3;
+  color: #444;
+  padding: 10px 14px;
+  margin: 8px 0 16px;
+  border-left: 3px solid #b58900;
+  border-radius: 4px;
+}
+
 /* TOC — atomic block; cursor can't enter (NodeView is contenteditable=
  * false), entries are dim links that scroll-to on click. List indent
  * encodes heading depth. */

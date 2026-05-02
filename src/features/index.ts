@@ -13,6 +13,7 @@ import { code } from "./code.ts";
 import { emoji } from "./emoji.ts";
 import { emphasis } from "./emphasis.ts";
 import { fencedCode } from "./fenced-code.ts";
+import { frontMatter } from "./front-matter.ts";
 import { heading } from "./heading.ts";
 import { highlight } from "./highlight.ts";
 import { hr } from "./hr.ts";
@@ -43,6 +44,7 @@ export const ALL_FEATURES: FeatureSpec[] = [
   task,
   list,
   fencedCode,
+  frontMatter,
   toc,
   autoPair,
 ];

@@ -24,7 +24,7 @@ Status legend:
 | indented code (4-space) | ❌ | — | |
 | thematic break `---` | ✅ | `hr` | |
 | HTML block | ❌ | — | decision pending: raw vs escape |
-| YAML front matter `---\n…\n---` | ❌ | — | Typora extension |
+| YAML front matter `---\n…\n---` | ✅ | `front-matter` | Custom md-it block rule, only fires at doc start. Stored as a code-block-shaped node (text content, marks: ""). Round-trip preserves body text. Custom `<front-matter>` element to dodge `<pre>` / `<div>` tag collisions. |
 | reference link def `[id]: url` | ❌ | — | |
 | math block `$$…$$` | ❌ | — | Typora extension |
 | table `\| a \| b \|` | ❌ | — | GFM; biggest single block-level item |

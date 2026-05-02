@@ -32,6 +32,9 @@ describe("round-trip: blocks", () => {
   test("toc", () => roundTripStable("# Title\n\n[toc]\n\nbody"));
   test("toc uppercase normalizes", () =>
     roundTripStable("# Title\n\n[toc]\n\nbody")); // [TOC] also accepted on input; output is [toc]
+  test("front matter", () =>
+    roundTripStable("---\ntitle: Hello\ndate: 2024-01-01\n---\n\nbody"));
+  test("front matter empty body", () => roundTripStable("---\n\n---\n\nbody"));
   test("fenced code with lang", () => roundTripStable("```ts\nconst x = 1;\n```"));
   test("fenced code without lang", () => roundTripStable("```\nplain text\n```"));
   test("code block preserves internal newlines", () =>
