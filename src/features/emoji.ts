@@ -251,23 +251,36 @@ function emojiAutocompletePlugin(): Plugin<AutoState> {
         return false;
       },
     },
-    // Position the popup below the cursor after every update. PM
-    // `coordsAtPos` returns viewport coords; convert to editor-relative
-    // since the popup's offset parent is `.ProseMirror` (CSS sets it
-    // `position: relative`).
+    // Position the popup below the cursor after every update. We use
+    // `position: fixed` (viewport coords) so the offset-parent dance
+    // doesn't matter — `coordsAtPos` returns viewport coords directly.
     view(view) {
       const reposition = () => {
         const s = autoKey.getState(view.state);
         if (!s?.open) return;
         const el = view.dom.querySelector<HTMLElement>(".emoji-completion");
         if (!el) return;
-        const coords = view.coordsAtPos(s.to);
-        const editorRect = view.dom.getBoundingClientRect();
-        el.style.top = `${coords.bottom - editorRect.top + 2}px`;
-        el.style.left = `${coords.left - editorRect.left}px`;
-        // Ensure the selected row is in view (when count > visible).
+        // side=-1: anchor to the *right edge of the previous char* rather
+        // than "after the position". With the default (side=1), a cursor
+        // at the end of a textblock falls through to the textblock's
+        // bottom boundary — for our editor (min-height 168px) that's far
+        // below the actual line, putting the popup at the bottom of the
+        // empty editor area instead of below the cursor.
+        const coords = view.coordsAtPos(s.to, -1);
+        el.style.top = `${coords.bottom + 2}px`;
+        el.style.left = `${coords.left}px`;
+        // Keep the selected row visible by scrolling the popup itself
+        // (NOT scrollIntoView — that would walk up to scroll the page).
         const sel = el.querySelector<HTMLElement>(".emoji-completion-row.selected");
-        sel?.scrollIntoView({ block: "nearest" });
+        if (sel) {
+          const elRect = el.getBoundingClientRect();
+          const selRect = sel.getBoundingClientRect();
+          if (selRect.top < elRect.top) {
+            el.scrollTop -= elRect.top - selRect.top;
+          } else if (selRect.bottom > elRect.bottom) {
+            el.scrollTop += selRect.bottom - elRect.bottom;
+          }
+        }
       };
       reposition();
       return {

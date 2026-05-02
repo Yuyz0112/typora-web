@@ -86,11 +86,10 @@ html, body { margin: 0; padding: 0; font: 16px/1.6 -apple-system, system-ui, san
 
 /* Emoji autocomplete dropdown — floating below the cursor. The widget
  * is mounted inline (so test-pretty sees it) but visually positioned
- * absolutely; the plugin's view-update writes top/left every transaction.
- * `.ProseMirror` is the offset parent (position: relative below). */
-.ProseMirror { position: relative; }
+ * via `position: fixed` (viewport coords). The plugin's view-update
+ * writes top/left every transaction from view.coordsAtPos. */
 .ProseMirror .emoji-completion {
-  position: absolute;
+  position: fixed;
   z-index: 10;
   min-width: 200px;
   max-height: 240px;
