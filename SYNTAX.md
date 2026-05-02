@@ -21,7 +21,7 @@ Status legend:
 | nested list | ✅ | `list` | 3-step staircase exit (Typora-style) |
 | task list `- [ ]` / `- [x]` | ✅ | `task` | checkbox widget replaces `[ ] ` source; cursor-trapped (can't navigate into hidden marker); click toggles. round-trip stable. |
 | fenced code ```` ``` ```` | ✅ | `fenced-code` | lang input + arrow nav |
-| indented code (4-space) | ❌ | — | |
+| indented code (4-space) | 🟡 | (md-it built-in) | md-it produces a `code_block` token (no markup) — same shape as a fenced block with no lang; the existing `code_block` parser handler picks it up. doc-level round-trip stable; **md-text collapses** to fenced form on save. Shape preservation would need a `style: "indent" \| "fenced"` attr (phase 2). |
 | thematic break `---` | ✅ | `hr` | |
 | HTML block | ❌ | — | decision pending: raw vs escape |
 | YAML front matter `---\n…\n---` | ✅ | `front-matter` | Custom md-it block rule, only fires at doc start. Stored as a code-block-shaped node (text content, marks: ""). Round-trip preserves body text. Custom `<front-matter>` element to dodge `<pre>` / `<div>` tag collisions. |

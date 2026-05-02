@@ -45,6 +45,12 @@ describe("round-trip: blocks", () => {
   test("fenced code without lang", () => roundTripStable("```\nplain text\n```"));
   test("code block preserves internal newlines", () =>
     roundTripStable("```\nline 1\nline 2\nline 3\n```"));
+  // Indented (4-space) code: md-it produces a `code_block` token with no
+  // markup, same shape as a fenced block w/ no lang. Round-trip is at
+  // doc level — md-text serialises to the fenced form (no `style` attr
+  // distinguishes the two; phase 2 if shape preservation is needed).
+  test("indented code (collapses to fenced on save)", () =>
+    roundTripStable("    line 1\n    line 2"));
 });
 
 describe("round-trip: lists", () => {
