@@ -85,7 +85,7 @@ html, body { margin: 0; padding: 0; font: 16px/1.6 -apple-system, system-ui, san
 }
 
 /* YAML front matter — code-block-like display at doc start. */
-.ProseMirror front-matter {
+.ProseMirror yaml-block {
   display: block;
   white-space: pre;
   font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;

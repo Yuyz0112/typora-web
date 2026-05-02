@@ -60,14 +60,19 @@ export const hr: FeatureSpec = {
 
   cases: [
     {
+      // Lead with a paragraph + an Enter so `---` lands in the SECOND
+      // paragraph. At doc-start, `---<Enter>` is owned by front-matter
+      // (opens a yaml block), not hr — the seed-trailing-newlines path
+      // doesn't survive the parser (md collapses blank lines), hence the
+      // explicit Enter event.
       id: "dashes-commit-on-enter",
-      label: "--- + Enter → HR",
-      seed: "",
-      events: ["-", "-", "-", "<Enter>"],
+      label: "--- + Enter → HR (away from doc start)",
+      seed: "a",
+      events: ["<Enter>", "-", "-", "-", "<Enter>"],
       checkpoints: [
-        { at: 2, expect: "--|" },
-        { at: 3, expect: "<g>---</g>|" },
-        { at: 4, expect: "---\n|" },
+        { at: 1, expect: "a\n|" },
+        { at: 4, expect: "a\n<g>---</g>|" },
+        { at: 5, expect: "a\n---\n|" },
       ],
     },
     {
