@@ -10,6 +10,7 @@ import { autoPair } from "./auto-pair.ts";
 import { autolink } from "./autolink.ts";
 import { blockquote } from "./blockquote.ts";
 import { code } from "./code.ts";
+import { emoji } from "./emoji.ts";
 import { emphasis } from "./emphasis.ts";
 import { fencedCode } from "./fenced-code.ts";
 import { heading } from "./heading.ts";
@@ -25,6 +26,7 @@ import { task } from "./task.ts";
 
 export const ALL_FEATURES: FeatureSpec[] = [
   htmlComment,
+  emoji,
   emphasis,
   code,
   strike,

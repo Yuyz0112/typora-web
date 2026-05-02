@@ -71,6 +71,8 @@ describe("round-trip: inline marks", () => {
   test("hard break", () => roundTripStable("line a  \nline b"));
   test("html comment", () => roundTripStable("before <!-- a note --> after"));
   test("html comment empty", () => roundTripStable("<!---->"));
+  test("emoji known", () => roundTripStable("ship it :rocket: now"));
+  test("emoji unknown stays text", () => roundTripStable(":notarealname: still here"));
   test("soft break (newline in paragraph)", () => roundTripStable("line a\nline b"));
 });
 
