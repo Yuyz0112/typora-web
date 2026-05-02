@@ -83,7 +83,9 @@ describe("parseInline", () => {
     ]);
   });
 
-  test("~1~ — single tilde, no strike", () => {
-    expect(parseInline("~1~")).toEqual([]);
+  test("~1~ — single tilde is subscript (Typora extension)", () => {
+    expect(parseInline("~1~")).toEqual([
+      { type: "sub", from: 1, to: 2, openFrom: 0, openTo: 1, closeFrom: 2, closeTo: 3 },
+    ]);
   });
 });

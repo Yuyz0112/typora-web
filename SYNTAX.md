@@ -56,8 +56,8 @@ Status legend:
 | Syntax | Status | Notes |
 |---|---|---|
 | highlight `==x==` | ✅ | method-B; same shape as strike (no md-it rule needed — text flows through, normalize derives mark) |
-| subscript `~x~` | ❌ | conflicts with strike `~~` — needs disambiguation |
-| superscript `^x^` | ❌ | |
+| subscript `~x~` | ✅ | `sub-sup`; method-B. Strike (priority 1, `~~`) consumes first; sub (priority 1.2, `~`) only matches single-tilde pairs. `~~~x~~~` falls through (intentionally). |
+| superscript `^x^` | ✅ | `sub-sup`; method-B. `^` doesn't collide with anything else. |
 | inline math `$x$` | ❌ | |
 | math block `$$…$$` | ❌ | |
 | TOC `[toc]` | ❌ | |

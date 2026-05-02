@@ -19,12 +19,14 @@ import { image } from "./image.ts";
 import { link } from "./link.ts";
 import { list } from "./list.ts";
 import { strike } from "./strike.ts";
+import { subSup } from "./sub-sup.ts";
 import { task } from "./task.ts";
 
 export const ALL_FEATURES: FeatureSpec[] = [
   emphasis,
   code,
   strike,
+  subSup,
   highlight,
   autolink,
   link,
