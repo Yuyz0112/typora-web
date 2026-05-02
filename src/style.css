@@ -84,6 +84,23 @@ html, body { margin: 0; padding: 0; font: 16px/1.6 -apple-system, system-ui, san
   font-style: italic;
 }
 
+/* GFM table — minimal styling so the structure is visible. */
+.ProseMirror table {
+  border-collapse: collapse;
+  margin: 8px 0;
+  font-size: 0.95em;
+}
+.ProseMirror table th,
+.ProseMirror table td {
+  border: 1px solid #d0d0d0;
+  padding: 4px 10px;
+  vertical-align: top;
+}
+.ProseMirror table th {
+  background: #f4f4f4;
+  font-weight: 600;
+}
+
 /* YAML front matter — code-block-like display at doc start. */
 .ProseMirror yaml-block {
   display: block;

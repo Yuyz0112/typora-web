@@ -27,7 +27,7 @@ Status legend:
 | YAML front matter `---\n…\n---` | ✅ | `front-matter` | Custom md-it block rule, only fires at doc start. Stored as a code-block-shaped node (text content, marks: ""). Round-trip preserves body text. Custom `<front-matter>` element to dodge `<pre>` / `<div>` tag collisions. |
 | reference link def `[id]: url` | 🟡 | (md-it built-in) | md-it commonmark resolves all 3 forms (`[t][id]` / `[t][]` / `[t]`) to link tokens with resolved href; the `[id]: url` def is consumed silently. doc-level round-trip stable; **md-text collapses** — `[t][id]` + `[id]: url` serializes to `[t](url)` (the def is dropped). Phase-2 work to preserve shape: capture ref defs as nodes and add `refLabel` attr on the link mark. |
 | math block `$$…$$` | ❌ | — | Typora extension |
-| table `\| a \| b \|` | ❌ | — | GFM; biggest single block-level item |
+| table `\| a \| b \|` | 🟡 | `table` | Phase 1: parse / serialize / display + alignment (`:---`, `:---:`, `---:`). Inline marks in cells (em / strong / code / strike / etc.) preserved. Cell content is `inline*` (single line). **Phase 2 pending**: live editor input (`|c1|c2|<Enter>` to start), Tab/Shift-Tab cell nav, row/col add-delete UI. |
 
 ## CommonMark — inline
 

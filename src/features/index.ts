@@ -23,6 +23,7 @@ import { link } from "./link.ts";
 import { list } from "./list.ts";
 import { strike } from "./strike.ts";
 import { subSup } from "./sub-sup.ts";
+import { table } from "./table.ts";
 import { task } from "./task.ts";
 import { toc } from "./toc.ts";
 
@@ -45,6 +46,7 @@ export const ALL_FEATURES: FeatureSpec[] = [
   list,
   fencedCode,
   frontMatter,
+  table,
   toc,
   autoPair,
 ];

@@ -35,6 +35,12 @@ describe("round-trip: blocks", () => {
   test("front matter", () =>
     roundTripStable("---\ntitle: Hello\ndate: 2024-01-01\n---\n\nbody"));
   test("front matter empty body", () => roundTripStable("---\n\n---\n\nbody"));
+  test("table basic", () =>
+    roundTripStable("| col1 | col2 |\n| ---  | ---  |\n| a    | b    |"));
+  test("table with alignment", () =>
+    roundTripStable("| L   | C     | R   |\n| :--- | :---: | ---: |\n| a   | b     | c   |"));
+  test("table with inline marks", () =>
+    roundTripStable("| a   | b      |\n| --- | ---    |\n| x   | **y**  |"));
   test("fenced code with lang", () => roundTripStable("```ts\nconst x = 1;\n```"));
   test("fenced code without lang", () => roundTripStable("```\nplain text\n```"));
   test("code block preserves internal newlines", () =>
