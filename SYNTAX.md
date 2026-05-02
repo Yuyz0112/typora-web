@@ -14,7 +14,7 @@ Status legend:
 |---|---|---|---|
 | paragraph | ✅ | core | trailing-space preserved (md-it paragraph rule replaced) |
 | ATX heading `#`..`######` | ✅ | `heading` | |
-| setext heading (`===` / `---` underline) | ❌ | — | |
+| setext heading (`===` / `---` underline) | ✅ | `heading` | parser-only (Typora doesn't auto-convert); `style` attr preserves shape across round-trip; output uses canonical 3-char underline |
 | blockquote `>` | ✅ | `blockquote` | |
 | bullet list `-` / `*` / `+` | ✅ | `list` | tight/loose distinction not asserted |
 | ordered list `1.` | ✅ | `list` | |
