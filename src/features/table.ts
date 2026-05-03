@@ -391,7 +391,11 @@ function tableToolbarPlugin(): Plugin {
 
       const update = () => {
         info = findTableAtSelection(view.state);
-        if (!info) {
+        // Only this view's toolbar shows when this view is the focused
+        // one. Without the hasFocus gate, every case-card view in the
+        // harness with a table in its seed would stamp its own toolbar
+        // onto document.body, piling up at the top-left of the page.
+        if (!info || !view.hasFocus()) {
           root.style.display = "none";
           popup.style.display = "none";
           return;
@@ -417,6 +421,10 @@ function tableToolbarPlugin(): Plugin {
       const onScroll = () => update();
       window.addEventListener("scroll", onScroll, true);
       window.addEventListener("resize", onScroll);
+      // PM doesn't dispatch a transaction on focus/blur — wire those
+      // explicitly so toolbar visibility tracks which view is active.
+      view.dom.addEventListener("focusin", update);
+      view.dom.addEventListener("focusout", update);
 
       return {
         update() {
@@ -425,6 +433,8 @@ function tableToolbarPlugin(): Plugin {
         destroy() {
           window.removeEventListener("scroll", onScroll, true);
           window.removeEventListener("resize", onScroll);
+          view.dom.removeEventListener("focusin", update);
+          view.dom.removeEventListener("focusout", update);
           root.remove();
           popup.remove();
         },
