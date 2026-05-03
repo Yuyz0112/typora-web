@@ -1,4 +1,4 @@
-# typora-web :rocket:
+# typora-web
 
 [toc]
 
@@ -10,7 +10,7 @@
 
 Typora set the bar for **inline-rendered** markdown: you see ==highlighted== prose, ~~struck-through~~ drafts, and `inline code` exactly where you wrote them, with raw `*` and `_` only peeking out when the cursor is nearby. Porting that feel to the web — losslessly, on a real structured document model — turns out to be a deep problem. We're working through it one behavior at a time.
 
-The pitch in one line: **every supported syntax is a spec, and every spec is a scripted scenario ported from observed Typora behavior**. :sparkles:
+The pitch in one line: **every supported syntax is a spec, and every spec is a scripted scenario ported from observed Typora behavior**.
 
 ## How we work
 
