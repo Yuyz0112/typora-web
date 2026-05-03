@@ -3,12 +3,12 @@ import { EditorState, TextSelection } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 
 import { defaultPlugins } from "./editor.ts";
-import { feedEvent, type Event } from "./events.ts";
+import { feedEvent, type Event } from "../specs/events.ts";
 import { collectCases } from "./features/index.ts";
 import { parse } from "./parser.ts";
 import { serialize } from "./serializer.ts";
 import { schema } from "./schema.ts";
-import { pretty } from "./test-pretty.ts";
+import { pretty } from "../specs/pretty.ts";
 
 import "prosemirror-view/style/prosemirror.css";
 import "./style.css";

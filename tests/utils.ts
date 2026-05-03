@@ -2,14 +2,14 @@ import { describe, expect, test } from "@voidzero-dev/vite-plus-test";
 import { EditorState, TextSelection, type Transaction } from "prosemirror-state";
 
 import { createState } from "../src/editor.ts";
-import { type Event, feedEvent, type ViewLike } from "../src/events.ts";
+import { type Event, feedEvent, type ViewLike } from "../specs/events.ts";
 import type { FeatureSpec } from "../src/features/_types.ts";
 import { parse } from "../src/parser.ts";
 import { schema } from "../src/schema.ts";
-import { pretty } from "../src/test-pretty.ts";
+import { pretty } from "../specs/pretty.ts";
 
 export { pretty };
-export type { Event } from "../src/events.ts";
+export type { Event } from "../specs/events.ts";
 
 // fakeView for headless tests — wires plugin dispatches back into state.apply
 function fakeView(state: EditorState): ViewLike & { state: EditorState } {
