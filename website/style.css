@@ -92,9 +92,9 @@ html, body {
 }
 .free-controls button:hover { background: #f7f7f7; }
 .free-controls button.active {
-  background: #1f1f1f;
-  color: #fff;
-  border-color: #1f1f1f;
+  background: #f4f4f4;
+  color: #1f1f1f;
+  border-color: #d0d0d0;
 }
 .free-controls kbd {
   font: 11px ui-monospace, SFMono-Regular, Menlo, monospace;
