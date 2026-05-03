@@ -69,6 +69,14 @@ html, body { margin: 0; padding: 0; font: 16px/1.6 -apple-system, system-ui, san
   font-style: normal;
   user-select: none;
 }
+/* Like syntax-hint but italic — used for ref-def draft state where the
+ * line "[label]:" is starting to look like a definition. */
+.ProseMirror .syntax-hint-italic {
+  color: #b0b0b0;
+  font-style: italic;
+  font-weight: normal;
+  user-select: none;
+}
 /* Delim char is present in the doc text but visually absent when the cursor
  * is outside the mark's surrounding span. PM pos still tracks it, so arrow
  * keys may briefly land on a hidden delim — fine, it becomes visible as
@@ -83,6 +91,30 @@ html, body { margin: 0; padding: 0; font: 16px/1.6 -apple-system, system-ui, san
   color: #999;
   font-style: italic;
 }
+
+/* Reference link definition — atom block. The `[`, `]`, `:` decoration
+ * comes from CSS so the user can't navigate into them; the label and
+ * url stay as visible spans (read-only since the parent is contenteditable
+ * false). */
+.ProseMirror ref-def {
+  display: block;
+  margin: 4px 0;
+  font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #555;
+  user-select: none;
+}
+.ProseMirror ref-def .ref-def-label::before {
+  content: "[ ";
+  color: #b0b0b0;
+  font-style: italic;
+}
+.ProseMirror ref-def .ref-def-label::after {
+  content: " ]: ";
+  color: #b0b0b0;
+  font-style: italic;
+}
+.ProseMirror ref-def .ref-def-url { color: #0969da; }
+.ProseMirror ref-def .ref-def-title { color: #888; font-style: italic; }
 
 /* GFM table — minimal styling so the structure is visible. */
 .ProseMirror table {

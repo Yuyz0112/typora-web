@@ -20,6 +20,7 @@ import { hr } from "./hr.ts";
 import { htmlComment } from "./html-comment.ts";
 import { image } from "./image.ts";
 import { link } from "./link.ts";
+import { refDef } from "./ref-def.ts";
 import { list } from "./list.ts";
 import { strike } from "./strike.ts";
 import { subSup } from "./sub-sup.ts";
@@ -46,6 +47,7 @@ export const ALL_FEATURES: FeatureSpec[] = [
   list,
   fencedCode,
   frontMatter,
+  refDef,
   table,
   toc,
   autoPair,

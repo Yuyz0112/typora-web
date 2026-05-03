@@ -40,6 +40,8 @@ function renderNode(n: Node): string {
   // so use classList.contains rather than a strict className comparison.
   if (tag === "span") {
     if (list.contains("syntax-hint")) return `<g>${el.textContent ?? ""}</g>`;
+    if (list.contains("syntax-hint-italic"))
+      return `<gi>${el.textContent ?? ""}</gi>`;
     if (list.contains("syntax-hidden")) return ""; // delim char present in text, visually hidden
     if (list.contains("task-marker-hidden")) return "";
     if (list.contains("play-caret")) return "|";
