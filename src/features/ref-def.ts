@@ -40,6 +40,8 @@ function refDraftPlugin(): Plugin {
     props: {
       decorations(state) {
         const decos: Decoration[] = [];
+        const cursor = state.selection.empty ? state.selection.from : -1;
+
         state.doc.descendants((node, pos) => {
           // Draft decorations on paragraphs that look like a starting
           // ref-def (text starts with `[<something>]:`).
@@ -64,23 +66,40 @@ function refDraftPlugin(): Plugin {
             );
             return false;
           }
-          // Placeholder attrs on empty url / title nodes — CSS reads
-          // `data-placeholder` and renders ghost text via ::before.
-          if (
-            (node.type.name === "ref_url" || node.type.name === "ref_title") &&
-            node.content.size === 0
-          ) {
-            const placeholder =
-              node.type.name === "ref_url"
-                ? "input link url here"
-                : "title (optional)";
-            decos.push(
-              Decoration.node(pos, pos + node.nodeSize, {
-                "data-placeholder": placeholder,
-              }),
-            );
-          }
-          return true;
+
+          if (node.type.name !== "link_def") return true;
+
+          // Inside a link_def: emit placeholder attrs on empty url /
+          // title parts. URL placeholder is always visible (it prompts
+          // the user to fill the required field). TITLE placeholder is
+          // gated on cursor-inside-this-link_def — title is optional,
+          // so we don't pollute idle defs with the prompt.
+          const linkDefStart = pos;
+          const linkDefEnd = pos + node.nodeSize;
+          const cursorInside = cursor > linkDefStart && cursor < linkDefEnd;
+
+          let childOffset = pos + 1; // skip link_def open
+          node.forEach((child) => {
+            const childStart = childOffset;
+            const childEnd = childStart + child.nodeSize;
+            const empty = child.content.size === 0;
+            if (empty && child.type.name === "ref_url") {
+              decos.push(
+                Decoration.node(childStart, childEnd, {
+                  "data-placeholder": "input link url here",
+                }),
+              );
+            }
+            if (empty && child.type.name === "ref_title" && cursorInside) {
+              decos.push(
+                Decoration.node(childStart, childEnd, {
+                  "data-placeholder": "title (optional)",
+                }),
+              );
+            }
+            childOffset = childEnd;
+          });
+          return false;
         });
         return decos.length > 0
           ? DecorationSet.create(state.doc, decos)
@@ -166,15 +185,37 @@ export const refDef: FeatureSpec = {
         return true;
       }
 
-      // Path 2: cursor is inside an existing link_def. If the url part
-      // already has content, Enter creates a new empty link_def below
-      // and parks the cursor in its label. (If url is empty, fall
-      // through — Enter is meaningless there, baseKeymap will absorb.)
+      // Path 2: cursor is inside an existing link_def.
+      //   * All three parts empty → delete the el (replace with an
+      //     empty paragraph, cursor inside it). Lets the user back out
+      //     after creating one too many.
+      //   * URL already filled → insert a fresh empty link_def below
+      //     and park cursor in its label. Chains entries.
+      //   * Otherwise → fall through; Enter inside an editable text
+      //     part is meaningless and baseKeymap will absorb it.
       for (let d = $from.depth; d >= 0; d--) {
         const node = $from.node(d);
         if (node.type.name !== "link_def") continue;
-        const urlNode = node.child(1); // [label, url, title]
-        if (urlNode.content.size === 0) return false;
+        const labelEmpty = node.child(0).content.size === 0;
+        const urlEmpty = node.child(1).content.size === 0;
+        const titleEmpty = node.child(2).content.size === 0;
+        if (labelEmpty && urlEmpty && titleEmpty) {
+          if (dispatch) {
+            const tr = state.tr;
+            const linkDefStart = $from.before(d);
+            const linkDefEnd = $from.after(d);
+            tr.replaceWith(
+              linkDefStart,
+              linkDefEnd,
+              schema.nodes.paragraph.create(),
+            );
+            // Cursor inside the fresh paragraph.
+            tr.setSelection(TextSelection.create(tr.doc, linkDefStart + 1));
+            dispatch(tr);
+          }
+          return true;
+        }
+        if (urlEmpty) return false;
         if (dispatch) {
           const linkDefEnd = $from.after(d);
           const fresh = buildLinkDef(schema, "", "", "");
@@ -260,6 +301,30 @@ export const refDef: FeatureSpec = {
           at: 8,
           expect:
             "<ref-def><rl>a</rl><ru>x</ru><rt></rt></ref-def>\n<ref-def><rl>|</rl><ru></ru><rt></rt></ref-def>",
+        },
+      ],
+    },
+    {
+      id: "empty-enter-deletes",
+      label: "Enter on an all-empty link_def removes it",
+      seed: "",
+      events: [
+        "[", "a", "]", ":", " ", "x", "<Enter>", // commit one
+        "<Enter>",                                 // chain → empty link_def below
+        "<Enter>",                                 // empty + Enter → delete el
+      ],
+      checkpoints: [
+        // After chained Enter (event 8): two link_defs, cursor in 2nd label.
+        {
+          at: 8,
+          expect:
+            "<ref-def><rl>a</rl><ru>x</ru><rt></rt></ref-def>\n<ref-def><rl>|</rl><ru></ru><rt></rt></ref-def>",
+        },
+        // Event 9: Enter on the empty link_def → it's replaced with an
+        // empty paragraph; cursor lands inside.
+        {
+          at: 9,
+          expect: "<ref-def><rl>a</rl><ru>x</ru><rt></rt></ref-def>\n|",
         },
       ],
     },
