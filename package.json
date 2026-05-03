@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vp dev",
     "build": "tsc && vp build",
-    "preview": "vp preview"
+    "build:lib": "tsc && vp build --config vite.lib.config.ts",
+    "preview": "vp preview",
+    "test": "vp test --run"
   },
   "devDependencies": {
     "@types/markdown-it": "^14.1.2",
