@@ -384,45 +384,55 @@ function tableToolbarPlugin(): Plugin {
   return new Plugin({
     view(view) {
       let info: TableInfo | null = null;
-      const getInfo = () => info;
-      const { root, popup } = buildToolbar(view, getInfo);
-      document.body.appendChild(root);
-      document.body.appendChild(popup);
+      // Lazy: toolbar DOM is only built and appended when this view is
+      // both focused and on a table. Unfocused views (every case-card
+      // in the harness with a table seed) never create toolbar DOM.
+      let toolbar: { root: HTMLElement; popup: HTMLElement } | null = null;
+
+      const ensureMounted = () => {
+        if (!toolbar) {
+          toolbar = buildToolbar(view, () => info);
+        }
+        if (!toolbar.root.isConnected) {
+          document.body.appendChild(toolbar.root);
+          document.body.appendChild(toolbar.popup);
+        }
+        return toolbar;
+      };
+      const unmount = () => {
+        if (toolbar?.root.isConnected) {
+          toolbar.root.remove();
+          toolbar.popup.remove();
+        }
+      };
 
       const update = () => {
         info = findTableAtSelection(view.state);
-        // Only this view's toolbar shows when this view is the focused
-        // one. Without the hasFocus gate, every case-card view in the
-        // harness with a table in its seed would stamp its own toolbar
-        // onto document.body, piling up at the top-left of the page.
         if (!info || !view.hasFocus()) {
-          root.style.display = "none";
-          popup.style.display = "none";
+          unmount();
           return;
         }
         const dom = view.nodeDOM(info.pos) as HTMLElement | null;
         if (!dom) {
-          root.style.display = "none";
+          unmount();
           return;
         }
+        const tb = ensureMounted();
         const rect = dom.getBoundingClientRect();
-        root.style.display = "flex";
-        root.style.top = `${rect.top - 32}px`;
-        root.style.left = `${rect.left}px`;
+        tb.root.style.display = "flex";
+        tb.root.style.top = `${rect.top - 32}px`;
+        tb.root.style.left = `${rect.left}px`;
         // Reflect current column's align in the button states.
         const cell = info.node.child(info.rowIdx).child(info.cellIdx);
         const cur = cell.attrs.align as string | null;
-        root.querySelectorAll<HTMLElement>("[data-align]").forEach((b) => {
+        tb.root.querySelectorAll<HTMLElement>("[data-align]").forEach((b) => {
           b.classList.toggle("active", b.dataset.align === cur);
         });
       };
-      update();
 
       const onScroll = () => update();
       window.addEventListener("scroll", onScroll, true);
       window.addEventListener("resize", onScroll);
-      // PM doesn't dispatch a transaction on focus/blur — wire those
-      // explicitly so toolbar visibility tracks which view is active.
       view.dom.addEventListener("focusin", update);
       view.dom.addEventListener("focusout", update);
 
@@ -435,8 +445,7 @@ function tableToolbarPlugin(): Plugin {
           window.removeEventListener("resize", onScroll);
           view.dom.removeEventListener("focusin", update);
           view.dom.removeEventListener("focusout", update);
-          root.remove();
-          popup.remove();
+          unmount();
         },
       };
     },
