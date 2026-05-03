@@ -363,22 +363,14 @@ html, body {
   color: #555;
 }
 
-.case-foot {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 16px;
+.case-checkpoints {
   font-size: 11.5px;
   color: #aaa;
-  margin-top: 2px;
+  display: block;
+  width: 100%;
+  margin-top: 4px;
 }
-.case-foot > details { flex: 0 0 auto; max-width: 100%; }
-.case-foot > .case-issue { margin-left: auto; align-self: center; }
-
-.case-checkpoints,
-.case-md-wrap { font-size: 11.5px; color: #aaa; }
-.case-checkpoints > summary,
-.case-md-wrap > summary {
+.case-checkpoints > summary {
   cursor: pointer;
   padding: 2px 0;
   list-style: none;
@@ -388,10 +380,8 @@ html, body {
   color: #888;
   user-select: none;
 }
-.case-checkpoints > summary::-webkit-details-marker,
-.case-md-wrap > summary::-webkit-details-marker { display: none; }
-.case-checkpoints > summary::before,
-.case-md-wrap > summary::before {
+.case-checkpoints > summary::-webkit-details-marker { display: none; }
+.case-checkpoints > summary::before {
   content: "+";
   display: inline-block;
   width: 9px;
@@ -400,8 +390,13 @@ html, body {
   line-height: 1;
   text-align: center;
 }
-.case-checkpoints[open] > summary::before,
-.case-md-wrap[open] > summary::before { content: "−"; }
+.case-checkpoints[open] > summary::before { content: "−"; }
+
+.case-report-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
 
 .cp-summary-stat {
   color: #b5b5b5;
@@ -459,8 +454,8 @@ html, body {
 }
 
 .case-issue {
-  font-size: 11.5px;
-  color: #aaa;
+  font-size: 11px;
+  color: #b5b5b5;
   text-decoration: none;
   border-bottom: 1px solid transparent;
   transition: color 0.12s, border-color 0.12s;
@@ -471,17 +466,6 @@ html, body {
 }
 
 .dump-wrap { position: relative; margin: 4px 0; }
-.case-md {
-  margin: 0;
-  padding: 6px 10px;
-  background: #fafafa;
-  border-radius: 3px;
-  font: 11.5px/1.5 ui-monospace, monospace;
-  overflow-x: auto;
-  white-space: pre-wrap;
-  word-break: break-word;
-  color: #666;
-}
 
 /* ─── copy button — text-y, unframed ─────────────────────────────── */
 .copy-btn {

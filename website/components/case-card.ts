@@ -23,7 +23,6 @@ import { EditorView } from "prosemirror-view";
 import { defaultPlugins } from "../../src/editor.ts";
 import { parse } from "../../src/parser.ts";
 import { schema } from "../../src/schema.ts";
-import { serialize } from "../../src/serializer.ts";
 import { feedEvent, type Event } from "../../specs/events.ts";
 import { pretty } from "../../specs/pretty.ts";
 import { fakeView } from "../../specs/sim.ts";
@@ -133,23 +132,16 @@ export function createCaseCard(script: Script): CaseCard {
         <button class="copy-btn copy-btn-corner" data-copy="pretty">copy</button>
         <pre class="case-pretty wrap-pre"></pre>
       </div>
-      <div class="case-foot">
-        ${checkpoints.length
-          ? `<details class="case-checkpoints"${anyMismatch ? " open" : ""}>
-              <summary>
-                <span class="cp-summary-label">checkpoints</span>
-                <span class="cp-summary-stat"></span>
-              </summary>
-              <ol class="cp-list"></ol>
-            </details>`
-          : ""}
-        <details class="case-md-wrap">
-          <summary>md</summary>
-          <div class="dump-wrap">
-            <button class="copy-btn copy-btn-corner" data-copy="md">copy</button>
-            <pre class="case-md wrap-pre"></pre>
-          </div>
-        </details>
+      ${checkpoints.length
+        ? `<details class="case-checkpoints"${anyMismatch ? " open" : ""}>
+            <summary>
+              <span class="cp-summary-label">checkpoints</span>
+              <span class="cp-summary-stat"></span>
+            </summary>
+            <ol class="cp-list"></ol>
+          </details>`
+        : ""}
+      <div class="case-report-row">
         <a class="case-issue" target="_blank" rel="noopener">report</a>
       </div>
     </div>
@@ -163,7 +155,6 @@ export function createCaseCard(script: Script): CaseCard {
 
   const $editor = el.querySelector(".case-editor") as HTMLDivElement;
   const $pretty = el.querySelector(".case-pretty") as HTMLElement;
-  const $md = el.querySelector(".case-md") as HTMLElement;
   const $progress = el.querySelector(".case-progress") as HTMLElement;
   const $next = el.querySelector(".case-next") as HTMLElement;
   const $reset = el.querySelector('[data-act="reset"]') as HTMLButtonElement;
@@ -245,7 +236,6 @@ export function createCaseCard(script: Script): CaseCard {
     $next.textContent = done ? "—" : String(script.events[cursorIndex]!);
     const observed = pretty(view.state);
     $pretty.textContent = observed;
-    $md.textContent = serialize(view.state.doc);
     $step.disabled = done;
     $play.disabled = done;
     el.classList.toggle("done", done);
@@ -306,10 +296,7 @@ export function createCaseCard(script: Script): CaseCard {
     const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".copy-btn");
     if (!btn) return;
     const which = btn.dataset.copy;
-    const text =
-      which === "pretty" ? $pretty.textContent ?? ""
-      : which === "md" ? $md.textContent ?? ""
-      : "";
+    const text = which === "pretty" ? $pretty.textContent ?? "" : "";
     if (!text) return;
     navigator.clipboard?.writeText(text).then(
       () => {
