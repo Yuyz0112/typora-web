@@ -4,7 +4,7 @@ import { EditorView } from "prosemirror-view";
 
 import { defaultPlugins } from "./editor.ts";
 import { feedEvent, type Event } from "../specs/events.ts";
-import { collectCases } from "./features/index.ts";
+import { collectCases } from "../specs/features/index.ts";
 import { parse } from "./parser.ts";
 import { serialize } from "./serializer.ts";
 import { schema } from "./schema.ts";

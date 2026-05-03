@@ -1,4 +1,4 @@
 import { runFeatureCases } from "../utils.ts";
-import { highlight } from "../../src/features/highlight.ts";
+import { highlightSpecs } from "../../specs/features/highlight.specs.ts";
 
-runFeatureCases(highlight);
+runFeatureCases(highlightSpecs);

@@ -1,4 +1,4 @@
 import { runFeatureCases } from "../utils.ts";
-import { toc } from "../../src/features/toc.ts";
+import { tocSpecs } from "../../specs/features/toc.specs.ts";
 
-runFeatureCases(toc);
+runFeatureCases(tocSpecs);

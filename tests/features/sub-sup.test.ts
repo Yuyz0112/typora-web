@@ -1,4 +1,4 @@
 import { runFeatureCases } from "../utils.ts";
-import { subSup } from "../../src/features/sub-sup.ts";
+import { subSupSpecs } from "../../specs/features/sub-sup.specs.ts";
 
-runFeatureCases(subSup);
+runFeatureCases(subSupSpecs);

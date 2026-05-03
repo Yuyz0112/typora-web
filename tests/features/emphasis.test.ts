@@ -1,4 +1,4 @@
 import { runFeatureCases } from "../utils.ts";
-import { emphasis } from "../../src/features/emphasis.ts";
+import { emphasisSpecs } from "../../specs/features/emphasis.specs.ts";
 
-runFeatureCases(emphasis);
+runFeatureCases(emphasisSpecs);

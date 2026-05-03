@@ -1,4 +1,4 @@
 import { runFeatureCases } from "../utils.ts";
-import { emoji } from "../../src/features/emoji.ts";
+import { emojiSpecs } from "../../specs/features/emoji.specs.ts";
 
-runFeatureCases(emoji);
+runFeatureCases(emojiSpecs);

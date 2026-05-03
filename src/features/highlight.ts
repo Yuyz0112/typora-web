@@ -22,10 +22,6 @@ export const highlight: FeatureSpec = {
     highlight: { open: "", close: "" },
   },
 
-  renderCases: {
-    mark: (children) => `<mark>${children}</mark>`,
-  },
-
   inline: {
     priority: 1.5, // between strike (1) and emphasis (2); delim char `=` doesn't collide
     scan: (text, consumed) => scanFixedDelim(text, "=", 2, "highlight", consumed),
@@ -33,20 +29,4 @@ export const highlight: FeatureSpec = {
     extRanges: (parent) => markExtRanges(parent, "highlight", 2),
   },
 
-  cases: [
-    {
-      id: "double-eq",
-      label: "highlight via double equals",
-      seed: "",
-      events: ["=", "=", "k", "=", "=", " "],
-      checkpoints: [
-        { at: 1, expect: "=|" },
-        { at: 2, expect: "==|" },
-        { at: 3, expect: "==k|" },
-        { at: 4, expect: "==k=|" },
-        { at: 5, expect: "<g>==</g><mark>k</mark><g>==</g>|" },
-        { at: 6, expect: "<mark>k</mark> |" },
-      ],
-    },
-  ],
 };

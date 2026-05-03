@@ -1,4 +1,4 @@
 import { runFeatureCases } from "../utils.ts";
-import { image } from "../../src/features/image.ts";
+import { imageSpecs } from "../../specs/features/image.specs.ts";
 
-runFeatureCases(image);
+runFeatureCases(imageSpecs);

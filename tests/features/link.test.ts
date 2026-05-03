@@ -1,4 +1,4 @@
 import { runFeatureCases } from "../utils.ts";
-import { link } from "../../src/features/link.ts";
+import { linkSpecs } from "../../specs/features/link.specs.ts";
 
-runFeatureCases(link);
+runFeatureCases(linkSpecs);

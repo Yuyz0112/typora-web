@@ -1,4 +1,4 @@
 import { runFeatureCases } from "../utils.ts";
-import { frontMatter } from "../../src/features/front-matter.ts";
+import { frontMatterSpecs } from "../../specs/features/front-matter.specs.ts";
 
-runFeatureCases(frontMatter);
+runFeatureCases(frontMatterSpecs);

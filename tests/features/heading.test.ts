@@ -1,4 +1,4 @@
 import { runFeatureCases } from "../utils.ts";
-import { heading } from "../../src/features/heading.ts";
+import { headingSpecs } from "../../specs/features/heading.specs.ts";
 
-runFeatureCases(heading);
+runFeatureCases(headingSpecs);

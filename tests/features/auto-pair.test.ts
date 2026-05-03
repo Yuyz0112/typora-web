@@ -1,4 +1,4 @@
 import { runFeatureCases } from "../utils.ts";
-import { autoPair } from "../../src/features/auto-pair.ts";
+import { autoPairSpecs } from "../../specs/features/auto-pair.specs.ts";
 
-runFeatureCases(autoPair);
+runFeatureCases(autoPairSpecs);

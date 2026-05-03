@@ -1,4 +1,4 @@
 import { runFeatureCases } from "../utils.ts";
-import { table } from "../../src/features/table.ts";
+import { tableSpecs } from "../../specs/features/table.specs.ts";
 
-runFeatureCases(table);
+runFeatureCases(tableSpecs);

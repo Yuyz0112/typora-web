@@ -1,4 +1,4 @@
 import { runFeatureCases } from "../utils.ts";
-import { autolink } from "../../src/features/autolink.ts";
+import { autolinkSpecs } from "../../specs/features/autolink.specs.ts";
 
-runFeatureCases(autolink);
+runFeatureCases(autolinkSpecs);

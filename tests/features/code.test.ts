@@ -1,4 +1,4 @@
 import { runFeatureCases } from "../utils.ts";
-import { code } from "../../src/features/code.ts";
+import { codeSpecs } from "../../specs/features/code.specs.ts";
 
-runFeatureCases(code);
+runFeatureCases(codeSpecs);

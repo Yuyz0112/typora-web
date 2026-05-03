@@ -21,7 +21,6 @@ import type {
 } from "prosemirror-model";
 import type { Command, Plugin } from "prosemirror-state";
 
-import type { Event } from "../events.ts";
 import type { InlineSpan } from "../inline-parse.ts";
 import type { ParserState } from "../parser.ts";
 import type {
@@ -29,35 +28,11 @@ import type {
   MarkSpec as SerializerMarkSpec,
 } from "../serializer.ts";
 
-// A Case is one scripted scenario — seed text plus an event stream — with
-// one or more Checkpoints along the way that assert pretty() output. One
-// data shape, two consumers:
-//   - the feature's test file runs each checkpoint as an independent test
-//     (slice events up to cp.at, assert pretty equals cp.expect), so
-//     intermediate invariants stay covered.
-//   - main.ts lists each case as a single preset that plays the full event
-//     stream; the harness can show cp.expect alongside as a visual oracle.
-// This keeps "cases are the spec in both places" literal, not copy-pasted.
-export type Checkpoint = {
-  at: number;      // assert after the first `at` events have been fed (0 = seed state)
-  expect: string;  // pretty() output at that point
-};
-
-export type Case = {
-  id: string;
-  label: string;
-  seed: string;
-  events: Event[];
-  checkpoints: Checkpoint[];
-};
-
 export type TokenHandler = (
   state: ParserState,
   token: Token,
   schema: Schema,
 ) => void;
-
-export type RenderCase = (children: string, el: Element) => string;
 
 export type FeatureSpec = {
   name: string;
@@ -87,8 +62,6 @@ export type FeatureSpec = {
   // NodeViews (via Plugin.props.nodeViews), DOM event handlers for custom
   // UI overlays. Anything that doesn't fit inputRules / keymap / normalize.
   plugins?: (schema: Schema) => Plugin[];
-  renderCases?: Record<string, RenderCase>;
-  cases?: Case[];
   inline?: InlineFeatureSpec;
 };
 

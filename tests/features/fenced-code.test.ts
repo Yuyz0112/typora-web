@@ -1,4 +1,4 @@
 import { runFeatureCases } from "../utils.ts";
-import { fencedCode } from "../../src/features/fenced-code.ts";
+import { fencedCodeSpecs } from "../../specs/features/fenced-code.specs.ts";
 
-runFeatureCases(fencedCode);
+runFeatureCases(fencedCodeSpecs);

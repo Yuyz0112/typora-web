@@ -5,7 +5,7 @@ import { chainCommands } from "prosemirror-commands";
 import type { Command, Plugin } from "prosemirror-state";
 import type { Schema } from "prosemirror-model";
 
-import type { Case, FeatureSpec, InlineFeatureSpec } from "./_types.ts";
+import type { FeatureSpec, InlineFeatureSpec } from "./_types.ts";
 import { autoPair } from "./auto-pair.ts";
 import { autolink } from "./autolink.ts";
 import { blockquote } from "./blockquote.ts";
@@ -72,9 +72,6 @@ export function collectParserTokens(): NonNullable<FeatureSpec["parserTokens"]> 
 export function collectMarkDelims(): NonNullable<FeatureSpec["markDelims"]> {
   return Object.assign({}, ...ALL_FEATURES.map((f) => f.markDelims ?? {}));
 }
-export function collectRenderCases(): NonNullable<FeatureSpec["renderCases"]> {
-  return Object.assign({}, ...ALL_FEATURES.map((f) => f.renderCases ?? {}));
-}
 export function collectInputRules(
   schema: Parameters<NonNullable<FeatureSpec["inputRules"]>>[0],
 ) {
@@ -113,12 +110,6 @@ export function collectKeymaps(schema: Schema): Record<string, Command> {
 }
 export function collectPlugins(schema: Schema): Plugin[] {
   return ALL_FEATURES.flatMap((f) => f.plugins?.(schema) ?? []);
-}
-// Cases get namespaced by feature so ids stay unique across the app.
-export function collectCases(): Array<Case & { feature: string }> {
-  return ALL_FEATURES.flatMap((f) =>
-    (f.cases ?? []).map((c) => ({ ...c, feature: f.name })),
-  );
 }
 // Inline features, priority-sorted. Consumed by inline-parse orchestration,
 // normalize (mark sync), decorations (which marks use the inline path),

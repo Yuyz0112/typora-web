@@ -3,7 +3,7 @@ import { EditorState, TextSelection, type Transaction } from "prosemirror-state"
 
 import { createState } from "../src/editor.ts";
 import { type Event, feedEvent, type ViewLike } from "../specs/events.ts";
-import type { FeatureSpec } from "../src/features/_types.ts";
+import type { FeatureSpecs } from "../specs/_types.ts";
 import { parse } from "../src/parser.ts";
 import { schema } from "../src/schema.ts";
 import { pretty } from "../specs/pretty.ts";
@@ -47,9 +47,9 @@ export function apply(state: EditorState, events: Event[]): EditorState {
 // Each feature.test.ts becomes a one-liner; the expansion shape (describe
 // feature → describe case.label → test "at N") stays uniform so failures
 // read consistently in the runner output.
-export function runFeatureCases(feature: FeatureSpec): void {
-  describe(feature.name, () => {
-    for (const c of feature.cases ?? []) {
+export function runFeatureCases(specs: FeatureSpecs): void {
+  describe(specs.name, () => {
+    for (const c of specs.cases ?? []) {
       describe(c.label, () => {
         for (const cp of c.checkpoints) {
           test(`at ${cp.at}`, () => {

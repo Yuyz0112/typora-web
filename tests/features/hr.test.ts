@@ -1,4 +1,4 @@
 import { runFeatureCases } from "../utils.ts";
-import { hr } from "../../src/features/hr.ts";
+import { hrSpecs } from "../../specs/features/hr.specs.ts";
 
-runFeatureCases(hr);
+runFeatureCases(hrSpecs);

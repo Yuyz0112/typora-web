@@ -12,7 +12,7 @@
 import { EditorState } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 
-import { collectRenderCases } from "../src/features/index.ts";
+import { collectRenderCases } from "./features/index.ts";
 
 const featureRenderCases = collectRenderCases();
 

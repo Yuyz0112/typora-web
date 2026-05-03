@@ -1,4 +1,4 @@
 import { runFeatureCases } from "../utils.ts";
-import { blockquote } from "../../src/features/blockquote.ts";
+import { blockquoteSpecs } from "../../specs/features/blockquote.specs.ts";
 
-runFeatureCases(blockquote);
+runFeatureCases(blockquoteSpecs);

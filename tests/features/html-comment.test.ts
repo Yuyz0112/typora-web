@@ -1,4 +1,4 @@
 import { runFeatureCases } from "../utils.ts";
-import { htmlComment } from "../../src/features/html-comment.ts";
+import { htmlCommentSpecs } from "../../specs/features/html-comment.specs.ts";
 
-runFeatureCases(htmlComment);
+runFeatureCases(htmlCommentSpecs);

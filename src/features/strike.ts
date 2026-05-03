@@ -31,11 +31,6 @@ export const strike: FeatureSpec = {
     strike: { open: "", close: "" },
   },
 
-  renderCases: {
-    s: (children) => `<s>${children}</s>`,
-    del: (children) => `<s>${children}</s>`,
-  },
-
   inline: {
     priority: 1, // between code (0) and emphasis (2)
     scan: (text, consumed) => scanFixedDelim(text, "~", 2, "strike", consumed),
@@ -43,18 +38,4 @@ export const strike: FeatureSpec = {
     extRanges: (parent) => markExtRanges(parent, "strike", 2),
   },
 
-  cases: [
-    {
-      id: "double-tilde",
-      label: "strike via double tildes",
-      seed: "",
-      events: ["~", "~", "1", "~", "~", " "],
-      checkpoints: [
-        { at: 2, expect: "~~|" },
-        { at: 3, expect: "~~1|" },
-        { at: 5, expect: "<g>~~</g><s>1</s><g>~~</g>|" },
-        { at: 6, expect: "<s>1</s> |" },
-      ],
-    },
-  ],
 };

@@ -1,4 +1,4 @@
 import { runFeatureCases } from "../utils.ts";
-import { task } from "../../src/features/task.ts";
+import { taskSpecs } from "../../specs/features/task.specs.ts";
 
-runFeatureCases(task);
+runFeatureCases(taskSpecs);

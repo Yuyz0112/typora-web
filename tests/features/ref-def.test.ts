@@ -1,4 +1,4 @@
 import { runFeatureCases } from "../utils.ts";
-import { refDef } from "../../src/features/ref-def.ts";
+import { refDefSpecs } from "../../specs/features/ref-def.specs.ts";
 
-runFeatureCases(refDef);
+runFeatureCases(refDefSpecs);

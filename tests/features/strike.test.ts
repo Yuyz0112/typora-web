@@ -1,4 +1,4 @@
 import { runFeatureCases } from "../utils.ts";
-import { strike } from "../../src/features/strike.ts";
+import { strikeSpecs } from "../../specs/features/strike.specs.ts";
 
-runFeatureCases(strike);
+runFeatureCases(strikeSpecs);
