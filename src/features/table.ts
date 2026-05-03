@@ -206,8 +206,8 @@ function buildToolbar(view: EditorView, getInfo: () => TableInfo | null): {
     b.title = `Align ${a}`;
     b.dataset.align = a;
     b.appendChild(svgIcon(lines));
-    b.addEventListener("mousedown", (e) => {
-      e.preventDefault();
+    b.addEventListener("mousedown", (e) => e.preventDefault());
+    b.addEventListener("click", () => {
       const info = getInfo();
       if (info) applyAlignToColumn(view, info, a);
     });
@@ -245,8 +245,8 @@ function buildToolbar(view: EditorView, getInfo: () => TableInfo | null): {
         stroke='currentColor' stroke-width='1.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/>`,
     ),
   );
-  trash.addEventListener("mousedown", (e) => {
-    e.preventDefault();
+  trash.addEventListener("mousedown", (e) => e.preventDefault());
+  trash.addEventListener("click", () => {
     const info = getInfo();
     if (info) deleteTable(view, info);
   });
@@ -319,10 +319,9 @@ function buildToolbar(view: EditorView, getInfo: () => TableInfo | null): {
     if (!t) return;
     setHighlight(Number(t.dataset.r), Number(t.dataset.c));
   });
-  gridEl.addEventListener("mousedown", (e) => {
+  gridEl.addEventListener("click", (e) => {
     const t = (e.target as HTMLElement).closest(".table-resize-cell") as HTMLElement | null;
     if (!t) return;
-    e.preventDefault();
     const target = popupSnapshot ?? getInfo();
     if (!target) return;
     resizeTable(view, target, Number(t.dataset.r), Number(t.dataset.c));
@@ -353,8 +352,8 @@ function buildToolbar(view: EditorView, getInfo: () => TableInfo | null): {
 
   popup.append(gridEl, inputs);
 
-  grid.addEventListener("mousedown", (e) => {
-    e.preventDefault();
+  grid.addEventListener("mousedown", (e) => e.preventDefault());
+  grid.addEventListener("click", () => {
     const liveInfo = getInfo();
     if (!liveInfo) return;
     if (popup.style.display === "block") {
