@@ -77,8 +77,14 @@ class TocNodeView implements NodeView {
     const tr = this.view.state.tr;
     // Cursor at the start of the heading's text content.
     tr.setSelection(TextSelection.near(tr.doc.resolve(headingPos + 1)));
-    tr.scrollIntoView();
     this.view.dispatch(tr);
+    // Scroll the heading itself to the top of the viewport. PM's
+    // tr.scrollIntoView only nudges the cursor into a comfortable
+    // band; for navigation we want the heading pinned at the top.
+    // Hosts can offset for sticky chrome via `scroll-margin-top` on
+    // their headings (the website does this for its sticky nav).
+    const dom = this.view.nodeDOM(headingPos) as HTMLElement | null;
+    dom?.scrollIntoView({ block: "start", behavior: "smooth" });
     this.view.focus();
   }
 

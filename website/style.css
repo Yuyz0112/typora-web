@@ -56,6 +56,13 @@ html, body {
 .site-nav .ext { color: #888; text-decoration: none; transition: color 0.15s; }
 .site-nav .ext:hover { color: #1f1f1f; }
 
+/* Heading scroll offset — leave room for the sticky nav so toc
+ * jumps don't tuck the target under it. The lib uses native
+ * scrollIntoView({block: "start"}); each host decides its own offset. */
+.ProseMirror :is(h1, h2, h3, h4, h5, h6) {
+  scroll-margin-top: 72px;
+}
+
 /* ─── page wrapper ───────────────────────────────────────────────── */
 .page {
   max-width: 760px;
