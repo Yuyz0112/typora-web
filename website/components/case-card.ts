@@ -1,17 +1,20 @@
 // Per-case card — a self-contained replay harness with one EditorView,
-// step / play / reset controls, and live pretty + md dumps.
+// step / play / reset controls, live pretty (always visible), an
+// optional collapsible md dump, and a color-coded checkpoint panel.
 //
-// Each card owns its own ticker; cards don't coordinate. The shared
-// `getSpeed` getter lets a global slider influence every card's play
-// rate without a re-mount.
+// Checkpoint panel UX:
+//   - On mount we run a headless simulation of the script in a
+//     fakeView (no DOM). At each checkpoint's `at`, we capture
+//     pretty(state) and compare to cp.expect, recording pass/fail.
+//   - Each cp row is colored: green when the simulated pretty
+//     matched, red when it diverged. The currently-active row (when
+//     the live view's cursorIndex equals cp.at) gets a stronger
+//     emphasis.
+//   - Rows are clickable: click resets and fast-forwards to that step
+//     so the user can SEE the (mis)match in the live editor.
 //
-// If the script carries `checkpoints`, the card also surfaces:
-//   - a meta line (seed preview + event count badge)
-//   - a toggleable "checkpoints" panel listing every (at, expect) row
-//   - a live ✓/✗ matches-spec indicator that compares the current
-//     pretty() output against the nearest applicable checkpoint
-//   - a "report issue" affordance that prefills a GitHub issue body
-//     with the seed / event stream / observed pretty / expected pretty.
+// The card also exposes a "report" link that prefills a GitHub issue
+// with the seed / events / final expected / observed pretty.
 
 import type { Node as PMNode } from "prosemirror-model";
 import { EditorState, TextSelection } from "prosemirror-state";
@@ -23,6 +26,7 @@ import { schema } from "../../src/schema.ts";
 import { serialize } from "../../src/serializer.ts";
 import { feedEvent, type Event } from "../../specs/events.ts";
 import { pretty } from "../../specs/pretty.ts";
+import { fakeView } from "../../specs/sim.ts";
 
 export type Checkpoint = { at: number; expect: string };
 
@@ -41,6 +45,7 @@ export type CaseCard = {
 };
 
 const ISSUE_URL = "https://github.com/anthropics/typora-web/issues/new";
+const PLAY_INTERVAL_MS = 250;
 
 function escapeHTML(s: string): string {
   return s.replace(/[&<>"']/g, (c) =>
@@ -58,15 +63,53 @@ function previewSeed(seed: string): string {
   return oneLine.length > 56 ? oneLine.slice(0, 53) + "…" : oneLine;
 }
 
-export function createCaseCard(
-  script: Script,
-  getSpeed: () => number,
-): CaseCard {
+// Build the initial EditorState for a given script. Same recipe used
+// by both the live mount and the headless simulation, so the two
+// agree on starting selection + initial normalize pass.
+function initialState(script: Script): EditorState {
+  const doc: PMNode = script.seed
+    ? parse(script.seed)
+    : schema.nodes.doc.createAndFill()!;
+  const base = EditorState.create({
+    schema,
+    doc,
+    selection: TextSelection.atEnd(doc),
+    plugins: defaultPlugins(),
+  });
+  // Fire one no-op transaction to trigger normalize (method-B marks
+  // need an apply; the bare create() doesn't run appendTransaction).
+  return base.apply(base.tr.setSelection(base.selection));
+}
+
+// Headless replay: produce a Map<at, ok> where `ok` is whether the
+// simulated pretty(state) at step `at` equals the checkpoint's
+// expect. Runs once at mount; cheap because cases are short.
+function simulateCheckpoints(script: Script): Map<number, boolean> {
+  const out = new Map<number, boolean>();
+  const cps = script.checkpoints;
+  if (!cps || cps.length === 0) return out;
+  const view = fakeView(initialState(script));
+  const sorted = [...cps].sort((a, b) => a.at - b.at);
+  let i = 0;
+  for (const cp of sorted) {
+    while (i < cp.at) {
+      feedEvent(view, script.events[i]!);
+      i++;
+    }
+    out.set(cp.at, pretty(view.state) === cp.expect);
+  }
+  return out;
+}
+
+export function createCaseCard(script: Script): CaseCard {
   const checkpoints = script.checkpoints ?? [];
   const lastCp = checkpoints[checkpoints.length - 1];
+  const cpResults = simulateCheckpoints(script);
+  const anyMismatch = [...cpResults.values()].some((ok) => !ok);
 
   const el = document.createElement("div");
   el.className = "case-card";
+  if (anyMismatch) el.classList.add("has-mismatch");
   el.innerHTML = `
     <div class="case-head">
       <div class="case-title">
@@ -77,7 +120,6 @@ export function createCaseCard(
         </span>
       </div>
       <div class="case-controls">
-        <span class="case-match" title="matches nearest checkpoint"></span>
         <span class="case-progress"></span>
         <code class="case-next"></code>
         <button data-act="reset" title="Reset">↺</button>
@@ -87,24 +129,27 @@ export function createCaseCard(
     </div>
     <div class="case-body">
       <div class="case-editor"></div>
+      <div class="dump-wrap case-pretty-wrap">
+        <button class="copy-btn copy-btn-corner" data-copy="pretty">copy</button>
+        <pre class="case-pretty wrap-pre"></pre>
+      </div>
       <div class="case-foot">
-        <details class="case-dumps">
-          <summary>pretty + md</summary>
-          <div class="dump-wrap">
-            <button class="copy-btn copy-btn-corner" data-copy="pretty">copy</button>
-            <pre class="case-pretty wrap-pre"></pre>
-          </div>
+        ${checkpoints.length
+          ? `<details class="case-checkpoints"${anyMismatch ? " open" : ""}>
+              <summary>
+                <span class="cp-summary-label">checkpoints</span>
+                <span class="cp-summary-stat"></span>
+              </summary>
+              <ol class="cp-list"></ol>
+            </details>`
+          : ""}
+        <details class="case-md-wrap">
+          <summary>md</summary>
           <div class="dump-wrap">
             <button class="copy-btn copy-btn-corner" data-copy="md">copy</button>
             <pre class="case-md wrap-pre"></pre>
           </div>
         </details>
-        ${checkpoints.length
-          ? `<details class="case-checkpoints">
-              <summary>checkpoints <span class="cp-count">${checkpoints.length}</span></summary>
-              <ol class="cp-list"></ol>
-            </details>`
-          : ""}
         <a class="case-issue" target="_blank" rel="noopener">report</a>
       </div>
     </div>
@@ -121,32 +166,34 @@ export function createCaseCard(
   const $md = el.querySelector(".case-md") as HTMLElement;
   const $progress = el.querySelector(".case-progress") as HTMLElement;
   const $next = el.querySelector(".case-next") as HTMLElement;
-  const $match = el.querySelector(".case-match") as HTMLElement;
   const $reset = el.querySelector('[data-act="reset"]') as HTMLButtonElement;
   const $step = el.querySelector('[data-act="step"]') as HTMLButtonElement;
   const $play = el.querySelector('[data-act="play"]') as HTMLButtonElement;
   const $issue = el.querySelector(".case-issue") as HTMLAnchorElement;
   const $cpList = el.querySelector(".cp-list") as HTMLOListElement | null;
+  const $cpStat = el.querySelector(".cp-summary-stat") as HTMLElement | null;
 
   if ($cpList) {
     $cpList.innerHTML = checkpoints
-      .map(
-        (c) =>
-          `<li data-at="${c.at}"><span class="cp-at">@${c.at}</span><code class="cp-expect">${escapeHTML(c.expect)}</code></li>`,
-      )
+      .map((c) => {
+        const ok = cpResults.get(c.at) ?? true;
+        return `<li data-at="${c.at}" class="${ok ? "ok" : "bad"}">
+          <span class="cp-at">@${c.at}</span>
+          <code class="cp-expect">${escapeHTML(c.expect)}</code>
+        </li>`;
+      })
       .join("");
+  }
+  if ($cpStat && checkpoints.length) {
+    const passing = [...cpResults.values()].filter((ok) => ok).length;
+    $cpStat.textContent = `${passing}/${checkpoints.length}`;
+    $cpStat.classList.toggle("all-ok", passing === checkpoints.length);
+    $cpStat.classList.toggle("any-bad", passing < checkpoints.length);
   }
 
   let view: EditorView | null = null;
   let cursorIndex = 0;
   let playTimer: number | null = null;
-
-  function activeCheckpoint(): Checkpoint | undefined {
-    // Only the checkpoint that lands EXACTLY on the current cursor is
-    // a fair comparison — between checkpoints, we have no expected
-    // value to compare against, so the indicator stays neutral.
-    return checkpoints.find((c) => c.at === cursorIndex);
-  }
 
   function buildIssueHref(observedPretty: string): string {
     const cp = lastCp;
@@ -185,24 +232,8 @@ export function createCaseCard(
   }
 
   function mount(): void {
-    const doc: PMNode = script.seed
-      ? parse(script.seed)
-      : schema.nodes.doc.createAndFill()!;
-    // Match tests/utils.ts:setup — cursor at doc end after seed parse.
-    // List staircase cases (seed `- a\n  - b`) need this; otherwise the
-    // events run from the wrong starting cursor and produce visibly
-    // wrong DOM.
-    const base = EditorState.create({
-      schema,
-      doc,
-      selection: TextSelection.atEnd(doc),
-      plugins: defaultPlugins(),
-    });
-    // Fire one no-op transaction to trigger normalize before first
-    // render so method-B marks are applied. (See free-editor.ts.)
-    const state = base.apply(base.tr.setSelection(base.selection));
     if (view) view.destroy();
-    view = new EditorView($editor, { state });
+    view = new EditorView($editor, { state: initialState(script) });
     cursorIndex = 0;
     redraw();
   }
@@ -219,28 +250,10 @@ export function createCaseCard(
     $play.disabled = done;
     el.classList.toggle("done", done);
 
-    // Live spec match: shown only on the steps that have a checkpoint
-    // pinned to them. Between checkpoints we don't know what the
-    // expected pretty would be, so the indicator stays empty.
-    const cp = activeCheckpoint();
-    if (cp) {
-      const ok = observed === cp.expect;
-      $match.textContent = ok ? "✓" : "✗";
-      $match.title = ok
-        ? `matches checkpoint @${cp.at}`
-        : `expected @${cp.at}: ${cp.expect}`;
-      $match.classList.toggle("ok", ok);
-      $match.classList.toggle("bad", !ok);
-    } else {
-      $match.textContent = "";
-      $match.classList.remove("ok", "bad");
-    }
-
-    // Highlight the current row in the checkpoints panel.
     if ($cpList) {
       for (const li of $cpList.querySelectorAll<HTMLLIElement>("li")) {
         const at = Number(li.dataset.at);
-        li.classList.toggle("is-current", cp ? at === cp.at : false);
+        li.classList.toggle("active", at === cursorIndex);
       }
     }
 
@@ -266,18 +279,12 @@ export function createCaseCard(
       playTimer = window.setInterval(() => {
         const hasMore = stepOnce();
         if (!hasMore) setPlaying(false);
-      }, getSpeed());
+      }, PLAY_INTERVAL_MS);
     }
   }
 
-  $reset.addEventListener("click", () => {
-    setPlaying(false);
-    mount();
-  });
-  $step.addEventListener("click", () => {
-    setPlaying(false);
-    stepOnce();
-  });
+  $reset.addEventListener("click", () => { setPlaying(false); mount(); });
+  $step.addEventListener("click", () => { setPlaying(false); stepOnce(); });
   $play.addEventListener("click", () => setPlaying(playTimer === null));
 
   // Click a checkpoint row to fast-forward to that point.

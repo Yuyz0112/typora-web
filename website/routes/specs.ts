@@ -4,23 +4,20 @@
 // for ones the user isn't looking at.
 //
 // Layout:
-//   header           — count summary + global play-speed slider
+//   header           — short tagline + count summary
 //   filter input     — free-text match against feature name / case label
-//   feature groups   — sorted by feature name. Each group has a 1-line
-//                      description and is collapsed by default (first
-//                      open) so the page reads as a TOC.
+//   feature groups   — one per feature; the group summary is the name
+//                      + count, with a 1-line description on its own
+//                      row when expanded.
 
 import { createCaseCard, type Script, type CaseCard } from "../components/case-card.ts";
 import { mountNav } from "../components/nav.ts";
 import { collectCases } from "../../specs/features/index.ts";
 
-const GLOBAL_SPEED_DEFAULT = 250;
 const ISSUE_URL = "https://github.com/anthropics/typora-web/issues/new";
 
-// One-line plain-words descriptions per feature. The map key matches
-// the `name` field on each FeatureSpecs. Anything not in the map falls
-// back to the empty string (no row shown). Keep these short — the goal
-// is "what does this DO", not docs.
+// One-line plain-words descriptions per feature. Anything not in the
+// map renders without a description (graceful).
 const FEATURE_DESCRIPTIONS: Record<string, string> = {
   emphasis: "Italic and bold via */_ runs.",
   code: "Inline code spans with backtick fences.",
@@ -79,12 +76,12 @@ export function specsRoute(root: HTMLElement): () => void {
   main.className = "page page-specs";
   main.innerHTML = `
     <header class="specs-header">
-      <h1>Spec catalog</h1>
+      <h1>Spec</h1>
       <p class="specs-meta">
         <strong>${totalCases}</strong> behaviors across
         <strong>${groups.length}</strong> features. Each card replays a
-        scripted event stream; step or scrub to a checkpoint to see the
-        exact shape we test for.
+        scripted event stream; checkpoints below show every step where
+        we pin an exact rendered output.
       </p>
       <div class="specs-toolbar">
         <input
@@ -95,12 +92,6 @@ export function specsRoute(root: HTMLElement): () => void {
           autocomplete="off"
           spellcheck="false"
         />
-        <label class="global-speed">
-          <span>play</span>
-          <input id="global-speed" type="range" min="50" max="1500"
-                 step="50" value="${GLOBAL_SPEED_DEFAULT}" />
-          <span id="global-speed-val">${GLOBAL_SPEED_DEFAULT}ms</span>
-        </label>
       </div>
     </header>
     <div class="specs-groups"></div>
@@ -114,26 +105,14 @@ export function specsRoute(root: HTMLElement): () => void {
 
   const $groups = main.querySelector(".specs-groups") as HTMLElement;
   const $filter = main.querySelector("#specs-filter") as HTMLInputElement;
-  const $globalSpeed = main.querySelector("#global-speed") as HTMLInputElement;
-  const $globalSpeedVal = main.querySelector(
-    "#global-speed-val",
-  ) as HTMLSpanElement;
-  const getSpeed = (): number => Number($globalSpeed.value);
 
-  $globalSpeed.addEventListener("input", () => {
-    $globalSpeedVal.textContent = `${$globalSpeed.value}ms`;
-  });
-
-  // Each group renders its cards lazily, on first <details> open. Closing
-  // the section destroys the cards so EditorViews + their plugins (and
-  // toolbars, listeners, etc.) don't accumulate.
   const allCards: CaseCard[] = [];
 
   type GroupHandle = {
     feature: string;
     detail: HTMLDetailsElement;
     scripts: Script[];
-    cardEls: HTMLElement[]; // empty until mounted
+    cardEls: HTMLElement[];
     mountCards: () => void;
   };
   const handles: GroupHandle[] = [];
@@ -141,14 +120,14 @@ export function specsRoute(root: HTMLElement): () => void {
   for (const [i, g] of groups.entries()) {
     const det = document.createElement("details") as HTMLDetailsElement;
     det.className = "spec-group";
-    if (i === 0) det.open = true; // expand the first group; rest collapsed
+    if (i === 0) det.open = true;
     const desc = FEATURE_DESCRIPTIONS[g.feature] ?? "";
     det.innerHTML = `
       <summary>
         <span class="spec-group-name"></span>
         <span class="spec-group-count">${g.scripts.length}</span>
-        ${desc ? `<span class="spec-group-desc"></span>` : ""}
       </summary>
+      ${desc ? `<p class="spec-group-desc"></p>` : ""}
       <div class="spec-group-body"></div>
     `;
     (det.querySelector(".spec-group-name") as HTMLElement).textContent = g.feature;
@@ -162,7 +141,7 @@ export function specsRoute(root: HTMLElement): () => void {
     const mountCards = (): void => {
       if (mountedCards) return;
       mountedCards = g.scripts.map((s) => {
-        const c = createCaseCard(s, getSpeed);
+        const c = createCaseCard(s);
         c.el.dataset.featureId = g.feature;
         c.el.dataset.caseLabel = s.label.toLowerCase();
         body.append(c.el);
@@ -170,7 +149,6 @@ export function specsRoute(root: HTMLElement): () => void {
         return c;
       });
       allCards.push(...mountedCards);
-      // Re-apply current filter on freshly mounted cards.
       applyFilter($filter.value);
     };
     const unmountCards = (): void => {
@@ -197,10 +175,6 @@ export function specsRoute(root: HTMLElement): () => void {
     });
   }
 
-  // Filter: free-text, matches feature name + case label (case-insensitive,
-  // whitespace-tolerant). When the query is non-empty we eagerly mount any
-  // group that has a matching script so users see results without an extra
-  // click. Empty query = restore default (collapsed-except-first) shape.
   function applyFilter(q: string): void {
     const needle = q.trim().toLowerCase();
     if (!needle) {
@@ -220,13 +194,11 @@ export function specsRoute(root: HTMLElement): () => void {
         continue;
       }
       h.detail.classList.remove("hidden");
-      // Expand + mount so matches are visible.
       if (!h.detail.open) {
-        h.detail.open = true; // triggers toggle → mountCards
+        h.detail.open = true;
       } else {
         h.mountCards();
       }
-      // Hide non-matching cards within the group (only when feature itself didn't match).
       for (const el of h.cardEls) {
         const lbl = el.dataset.caseLabel ?? "";
         const show = featHit || lbl.includes(needle);

@@ -139,8 +139,8 @@ html, body {
   color: #555;
 }
 
-/* ─── specs catalog ──────────────────────────────────────────────── */
-.specs-header { margin-bottom: 36px; }
+/* ─── /spec page ──────────────────────────────────────────────────── */
+.specs-header { margin-bottom: 32px; }
 .specs-header h1 {
   font-size: 32px;
   font-weight: 600;
@@ -151,51 +151,40 @@ html, body {
 .specs-meta {
   color: #777;
   font-size: 14px;
-  margin: 0 0 22px;
+  margin: 0 0 24px;
   line-height: 1.55;
-  max-width: 56ch;
+  max-width: 60ch;
 }
 .specs-meta strong {
   color: #1f1f1f;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
-.specs-toolbar {
-  display: flex;
-  gap: 16px;
-  align-items: center;
-  flex-wrap: wrap;
-  font-size: 12px;
-  color: #999;
-}
+
+/* Refined filter — sits inline like a search field, hairline below
+ * only on focus. Quiet at rest, clear when used. */
+.specs-toolbar { margin-bottom: 8px; }
 .specs-filter {
-  flex: 1;
-  min-width: 200px;
+  width: 100%;
   border: none;
-  background: transparent;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
-  padding: 6px 2px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 4px;
+  padding: 8px 12px;
   font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI",
     "Helvetica Neue", system-ui, sans-serif;
   color: #1f1f1f;
   outline: none;
-  transition: border-color 0.15s;
+  box-sizing: border-box;
+  transition: background 0.15s, box-shadow 0.15s;
 }
 .specs-filter::placeholder { color: #b5b5b5; }
-.specs-filter:focus { border-bottom-color: #1f1f1f; }
-.specs-toolbar .global-speed {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  white-space: nowrap;
+.specs-filter:focus {
+  background: #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08);
 }
-.specs-toolbar .global-speed > span:first-child { color: #aaa; }
-.specs-toolbar input[type="range"] { width: 96px; }
 
 .specs-footer {
   margin-top: 64px;
-  padding-top: 20px;
-  border-top: 1px solid rgba(0, 0, 0, 0.06);
   font-size: 12.5px;
   color: #999;
   display: flex;
@@ -211,16 +200,14 @@ html, body {
 
 .hidden { display: none !important; }
 
-/* The spec catalog flows like a TOC — featherweight separators between
- * groups; no card chrome, no borders inside group bodies. */
-.spec-group + .spec-group {
-  border-top: 1px solid rgba(0, 0, 0, 0.05);
-}
+/* Feature group — clean TOC row, no border between adjacent groups
+ * (the cards inside carry the visual weight). */
+.spec-group { padding: 4px 0; }
 .spec-group > summary {
   cursor: pointer;
-  padding: 14px 0;
+  padding: 10px 0;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 12px;
   list-style: none;
 }
@@ -233,11 +220,10 @@ html, body {
   transition: transform 0.18s;
   font-size: 18px;
   line-height: 1;
-  align-self: center;
 }
 .spec-group[open] > summary::before { transform: rotate(90deg); }
 .spec-group-name {
-  font-weight: 500;
+  font-weight: 600;
   color: #1f1f1f;
   font-size: 15px;
   letter-spacing: -0.005em;
@@ -246,39 +232,46 @@ html, body {
   color: #b5b5b5;
   font-size: 11.5px;
   font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum";
 }
-.spec-group-desc {
-  color: #999;
+/* Description on its own row under the summary — only visible when
+ * the group is open. Italics and a soft color give it its own voice
+ * without competing with case content. */
+.spec-group[open] .spec-group-desc {
+  margin: 2px 0 12px 26px;
+  color: #888;
   font-size: 13px;
-  font-weight: 400;
-  margin-left: auto;
-  text-align: right;
-  max-width: 56ch;
-  line-height: 1.4;
+  font-style: italic;
+  line-height: 1.5;
+  max-width: 60ch;
 }
+.spec-group:not([open]) .spec-group-desc { display: none; }
 .spec-group-body {
-  padding: 4px 0 28px 26px;
+  padding: 0 0 16px 0;
   display: flex;
   flex-direction: column;
-  gap: 28px;
+  gap: 12px;
 }
 
-/* ─── case card — borderless, separated by whitespace ─────────────── */
-.case-card { font-size: 13px; }
+/* ─── case card — borderless soft sheet ──────────────────────────── */
+.case-card {
+  background: #fff;
+  border-radius: 6px;
+  padding: 14px 18px;
+  font-size: 13px;
+}
 .case-card.done .case-progress { color: #b5b5b5; }
 .case-head {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   gap: 16px;
-  margin-bottom: 6px;
+  margin-bottom: 10px;
   flex-wrap: wrap;
 }
 .case-title {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
   min-width: 0;
   flex: 1;
 }
@@ -347,45 +340,45 @@ html, body {
   min-width: 14px;
   text-align: center;
 }
-.case-match {
-  display: inline-block;
-  min-width: 14px;
-  text-align: center;
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1;
-}
-.case-match.ok { color: #4a9d6f; }
-.case-match.bad { color: #c25656; }
 
-.case-body { display: flex; flex-direction: column; gap: 4px; }
+.case-body { display: flex; flex-direction: column; gap: 8px; }
 .case-editor {
-  padding: 6px 0;
-  border-left: 1px solid rgba(0, 0, 0, 0.05);
-  padding-left: 14px;
+  padding: 4px 0 6px;
+  font-size: 13px;
 }
 .case-editor .ProseMirror { min-height: 24px; outline: none; font-size: 13px; }
 .case-editor .ProseMirror p { margin: 2px 0; }
 
+/* Pretty — always visible, the case-card's primary observable. */
+.case-pretty-wrap { position: relative; margin: 0; }
+.case-pretty {
+  margin: 0;
+  padding: 8px 10px;
+  background: #fafafa;
+  border-radius: 4px;
+  font: 11.5px/1.55 ui-monospace, monospace;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #555;
+}
+
 .case-foot {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 14px;
+  align-items: flex-start;
+  gap: 16px;
   font-size: 11.5px;
   color: #aaa;
   margin-top: 2px;
 }
-.case-foot > details { flex: 0 0 auto; }
-.case-foot > .case-issue { margin-left: auto; }
+.case-foot > details { flex: 0 0 auto; max-width: 100%; }
+.case-foot > .case-issue { margin-left: auto; align-self: center; }
 
-.case-dumps,
-.case-checkpoints {
-  font-size: 11.5px;
-  color: #aaa;
-}
-.case-dumps > summary,
-.case-checkpoints > summary {
+.case-checkpoints,
+.case-md-wrap { font-size: 11.5px; color: #aaa; }
+.case-checkpoints > summary,
+.case-md-wrap > summary {
   cursor: pointer;
   padding: 2px 0;
   list-style: none;
@@ -395,10 +388,10 @@ html, body {
   color: #888;
   user-select: none;
 }
-.case-dumps > summary::-webkit-details-marker,
-.case-checkpoints > summary::-webkit-details-marker { display: none; }
-.case-dumps > summary::before,
-.case-checkpoints > summary::before {
+.case-checkpoints > summary::-webkit-details-marker,
+.case-md-wrap > summary::-webkit-details-marker { display: none; }
+.case-checkpoints > summary::before,
+.case-md-wrap > summary::before {
   content: "+";
   display: inline-block;
   width: 9px;
@@ -407,32 +400,46 @@ html, body {
   line-height: 1;
   text-align: center;
 }
-.case-dumps[open] > summary::before,
-.case-checkpoints[open] > summary::before { content: "−"; }
+.case-checkpoints[open] > summary::before,
+.case-md-wrap[open] > summary::before { content: "−"; }
 
-.cp-count {
+.cp-summary-stat {
   color: #b5b5b5;
   font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  padding: 0 5px;
+  border-radius: 2px;
 }
+.cp-summary-stat.all-ok { color: #4a9d6f; }
+.cp-summary-stat.any-bad { color: #c25656; }
+
+/* Checkpoint rows — colored by simulated pass/fail. The active row
+ * (cursor-on-it in the live view) gets a stronger left rule. */
 .cp-list {
   list-style: none;
-  margin: 6px 0 0;
+  margin: 8px 0 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
 }
 .cp-list li {
   display: flex;
   gap: 10px;
   align-items: baseline;
-  padding: 3px 8px;
+  padding: 4px 10px;
   border-radius: 3px;
   cursor: pointer;
+  border-left: 2px solid transparent;
   transition: background 0.1s;
 }
-.cp-list li:hover { background: rgba(0, 0, 0, 0.03); }
-.cp-list li.is-current { background: rgba(0, 0, 0, 0.05); }
+.cp-list li.ok { background: rgba(74, 157, 111, 0.07); }
+.cp-list li.ok:hover { background: rgba(74, 157, 111, 0.12); }
+.cp-list li.bad { background: rgba(194, 86, 86, 0.08); }
+.cp-list li.bad:hover { background: rgba(194, 86, 86, 0.14); }
+.cp-list li.active { border-left-color: #1f1f1f; }
+.cp-list li.ok.active { border-left-color: #4a9d6f; }
+.cp-list li.bad.active { border-left-color: #c25656; }
 .cp-at {
   color: #b5b5b5;
   font: 11px ui-monospace, monospace;
@@ -440,6 +447,8 @@ html, body {
   min-width: 28px;
   flex-shrink: 0;
 }
+.cp-list li.ok .cp-at { color: #6fa386; }
+.cp-list li.bad .cp-at { color: #c08585; }
 .cp-expect {
   font: 11.5px/1.5 ui-monospace, monospace;
   color: #555;
@@ -462,7 +471,6 @@ html, body {
 }
 
 .dump-wrap { position: relative; margin: 4px 0; }
-.case-pretty,
 .case-md {
   margin: 0;
   padding: 6px 10px;
