@@ -257,9 +257,22 @@ function buildToolbar(view: EditorView, getInfo: () => TableInfo | null): {
   // to highlight up to (R, C); the numeric inputs reflect the hover
   // and can be edited directly. Click the grid (or press Enter on the
   // inputs) to commit.
+  //
+  // Snapshot the current TableInfo when the popup opens: while the
+  // popup is up, the user may interact with the popup (focusing
+  // inputs, clicking grid cells) which can cause `getInfo()` to flip
+  // to null mid-action. The snapshot keeps the target table stable.
+  let popupSnapshot: TableInfo | null = null;
   const popup = document.createElement("div");
   popup.className = "table-resize-popup";
   popup.style.display = "none";
+  // Block focus loss when clicking the popup background — preserves
+  // editor selection so the snapshot stays valid. Inputs are exempt;
+  // they need to receive focus to be typed in.
+  popup.addEventListener("mousedown", (e) => {
+    const t = e.target as HTMLElement;
+    if (t.tagName !== "INPUT") e.preventDefault();
+  });
 
   const gridEl = document.createElement("div");
   gridEl.className = "table-resize-grid";
@@ -310,18 +323,20 @@ function buildToolbar(view: EditorView, getInfo: () => TableInfo | null): {
     const t = (e.target as HTMLElement).closest(".table-resize-cell") as HTMLElement | null;
     if (!t) return;
     e.preventDefault();
-    const info = getInfo();
-    if (!info) return;
-    resizeTable(view, info, Number(t.dataset.r), Number(t.dataset.c));
+    const target = popupSnapshot ?? getInfo();
+    if (!target) return;
+    resizeTable(view, target, Number(t.dataset.r), Number(t.dataset.c));
     popup.style.display = "none";
+    popupSnapshot = null;
   });
   const commitInputs = () => {
-    const info = getInfo();
-    if (!info) return;
+    const target = popupSnapshot ?? getInfo();
+    if (!target) return;
     const R = Math.max(1, Math.min(20, Number(rIn.value) || 1));
     const C = Math.max(1, Math.min(20, Number(cIn.value) || 1));
-    resizeTable(view, info, R, C);
+    resizeTable(view, target, R, C);
     popup.style.display = "none";
+    popupSnapshot = null;
   };
   rIn.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
@@ -340,15 +355,17 @@ function buildToolbar(view: EditorView, getInfo: () => TableInfo | null): {
 
   grid.addEventListener("mousedown", (e) => {
     e.preventDefault();
-    const info = getInfo();
-    if (!info) return;
+    const liveInfo = getInfo();
+    if (!liveInfo) return;
     if (popup.style.display === "block") {
       popup.style.display = "none";
+      popupSnapshot = null;
       return;
     }
+    popupSnapshot = liveInfo;
     // Initialize highlight to current dims.
     let R = 0, C = 0;
-    info.node.forEach((row) => {
+    liveInfo.node.forEach((row) => {
       R++;
       C = Math.max(C, row.childCount);
     });
@@ -536,6 +553,90 @@ export const table: FeatureSpec = {
     // browser focus escape the table.
     Tab: tabCellNav(1),
     "Shift-Tab": tabCellNav(-1),
+
+    // Cmd/Ctrl-Enter inside a cell: insert an empty row below the
+    // current one. New cells inherit the column's `align` from the
+    // header row.
+    "Mod-Enter": (state, dispatch) => {
+      const $from = state.selection.$from;
+      let cellDepth = -1;
+      for (let d = $from.depth; d >= 0; d--) {
+        if ($from.node(d).type.name === "table_cell") {
+          cellDepth = d;
+          break;
+        }
+      }
+      if (cellDepth === -1) return false;
+      const tableDepth = cellDepth - 2;
+      const tableNode = $from.node(tableDepth);
+      const rowIdx = $from.index(tableDepth);
+      const cellIdx = $from.index(cellDepth - 1);
+      const colCount = tableNode.child(rowIdx).childCount;
+      if (dispatch) {
+        const headerRow = tableNode.child(0);
+        const newCells: PMNode[] = [];
+        for (let c = 0; c < colCount; c++) {
+          const align = (headerRow.child(c)?.attrs.align as string | null) ?? null;
+          newCells.push(
+            schema.nodes.table_cell.create({ header: false, align }, []),
+          );
+        }
+        const newRow = schema.nodes.table_row.create(null, newCells);
+        const tableStart = $from.before(tableDepth);
+        let insertAt = tableStart + 1;
+        for (let r = 0; r <= rowIdx; r++) insertAt += tableNode.child(r).nodeSize;
+        const tr = state.tr.insert(insertAt, newRow);
+        // Cursor inside the new row at the same column index.
+        let cursorPos = insertAt + 1; // inside row
+        for (let c = 0; c < cellIdx; c++) cursorPos += newRow.child(c).nodeSize;
+        cursorPos += 1; // inside cell
+        tr.setSelection(TextSelection.create(tr.doc, cursorPos));
+        dispatch(tr);
+      }
+      return true;
+    },
+
+    // Cmd/Ctrl-Shift-Backspace inside a cell: delete the current row.
+    // No-op (but consumed) when the table has a single row left.
+    "Mod-Shift-Backspace": (state, dispatch) => {
+      const $from = state.selection.$from;
+      let cellDepth = -1;
+      for (let d = $from.depth; d >= 0; d--) {
+        if ($from.node(d).type.name === "table_cell") {
+          cellDepth = d;
+          break;
+        }
+      }
+      if (cellDepth === -1) return false;
+      const tableDepth = cellDepth - 2;
+      const tableNode = $from.node(tableDepth);
+      const rowIdx = $from.index(tableDepth);
+      const cellIdx = $from.index(cellDepth - 1);
+      if (tableNode.childCount <= 1) return true; // consume, no-op
+      if (dispatch) {
+        const tableStart = $from.before(tableDepth);
+        let rowStart = tableStart + 1;
+        for (let r = 0; r < rowIdx; r++) rowStart += tableNode.child(r).nodeSize;
+        const row = tableNode.child(rowIdx);
+        const tr = state.tr.delete(rowStart, rowStart + row.nodeSize);
+        // Cursor → adjacent row, same column. Prefer next row (same
+        // index in the post-delete table); fall back to previous when
+        // we deleted the last row.
+        const newTable = tr.doc.nodeAt(tableStart)!;
+        const targetRowIdx = Math.min(rowIdx, newTable.childCount - 1);
+        let cursorPos = tableStart + 1;
+        for (let r = 0; r < targetRowIdx; r++)
+          cursorPos += newTable.child(r).nodeSize;
+        cursorPos += 1; // inside row
+        const targetRow = newTable.child(targetRowIdx);
+        const targetCol = Math.min(cellIdx, targetRow.childCount - 1);
+        for (let c = 0; c < targetCol; c++) cursorPos += targetRow.child(c).nodeSize;
+        cursorPos += 1; // inside cell
+        tr.setSelection(TextSelection.create(tr.doc, cursorPos));
+        dispatch(tr);
+      }
+      return true;
+    },
 
     // Live trigger: a paragraph whose text is exactly `|c1|c2|...|`
     // (≥ 2 cells, leading + trailing pipes) commits to a table on Enter.
@@ -810,6 +911,80 @@ export const table: FeatureSpec = {
           at: 9,
           expect:
             "<table><tr><th>|a</th><th>b</th></tr><tr><td></td><td></td></tr></table>",
+        },
+      ],
+    },
+    {
+      id: "mod-enter-adds-row-below",
+      label: "Mod-Enter inside a cell adds an empty row below; cursor moves there",
+      seed: "",
+      events: [
+        "|", "a", "|", "b", "|", "<Enter>", // 2x2: header [a,b], one empty body row, cursor in body[0]
+        "x",                                  // body[0] = "x"
+        "<Mod-Enter>",                        // add row below; cursor → new row, col 0
+        "z",                                  // new row col 0 = "z"
+      ],
+      checkpoints: [
+        // After Mod-Enter: 3 rows; cursor in new (3rd) row, col 0.
+        {
+          at: 8,
+          expect:
+            "<table><tr><th>a</th><th>b</th></tr><tr><td>x</td><td></td></tr><tr><td>|</td><td></td></tr></table>",
+        },
+        {
+          at: 9,
+          expect:
+            "<table><tr><th>a</th><th>b</th></tr><tr><td>x</td><td></td></tr><tr><td>z|</td><td></td></tr></table>",
+        },
+      ],
+    },
+    {
+      id: "mod-shift-backspace-deletes-row",
+      label: "Mod-Shift-Backspace deletes the current row",
+      seed: "",
+      events: [
+        "|", "a", "|", "b", "|", "<Enter>", // 2x2: header + 1 body row, cursor in body[0]
+        "x",                                  // body[0] = "x"
+        "<Mod-Enter>",                        // 3 rows total; cursor in new row 0,0
+        "y",                                  // new row [y, _]
+        "<Mod-Shift-Backspace>",              // delete current (3rd) row → cursor falls back to prev row
+      ],
+      checkpoints: [
+        {
+          at: 9,
+          expect:
+            "<table><tr><th>a</th><th>b</th></tr><tr><td>x</td><td></td></tr><tr><td>y|</td><td></td></tr></table>",
+        },
+        // Delete last row → 2 rows (header + body). Cursor in the now-last row, same col (0).
+        {
+          at: 10,
+          expect:
+            "<table><tr><th>a</th><th>b</th></tr><tr><td>|x</td><td></td></tr></table>",
+        },
+      ],
+    },
+    {
+      id: "mod-shift-backspace-only-row-noop",
+      label: "Mod-Shift-Backspace on a 1-row table is a no-op (use trash to delete)",
+      // Build a header-only table by deleting the body row of a 2-row table.
+      seed: "",
+      events: [
+        "|", "a", "|", "b", "|", "<Enter>", // header + 1 body row, cursor in body[0]
+        "<Mod-Shift-Backspace>",              // delete body[0] → header-only
+        "<Mod-Shift-Backspace>",              // try delete header → no-op
+      ],
+      checkpoints: [
+        // After first delete: header-only, cursor in header[0] (same column).
+        {
+          at: 7,
+          expect:
+            "<table><tr><th>|a</th><th>b</th></tr></table>",
+        },
+        // Second delete is consumed but does nothing.
+        {
+          at: 8,
+          expect:
+            "<table><tr><th>|a</th><th>b</th></tr></table>",
         },
       ],
     },
