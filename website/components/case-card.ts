@@ -4,6 +4,14 @@
 // Each card owns its own ticker; cards don't coordinate. The shared
 // `getSpeed` getter lets a global slider influence every card's play
 // rate without a re-mount.
+//
+// If the script carries `checkpoints`, the card also surfaces:
+//   - a meta line (seed preview + event count badge)
+//   - a toggleable "checkpoints" panel listing every (at, expect) row
+//   - a live ✓/✗ matches-spec indicator that compares the current
+//     pretty() output against the nearest applicable checkpoint
+//   - a "report issue" affordance that prefills a GitHub issue body
+//     with the seed / event stream / observed pretty / expected pretty.
 
 import type { Node as PMNode } from "prosemirror-model";
 import { EditorState, TextSelection } from "prosemirror-state";
@@ -16,11 +24,15 @@ import { serialize } from "../../src/serializer.ts";
 import { feedEvent, type Event } from "../../specs/events.ts";
 import { pretty } from "../../specs/pretty.ts";
 
+export type Checkpoint = { at: number; expect: string };
+
 export type Script = {
   id: string;
   label: string;
   seed: string;
   events: Event[];
+  checkpoints?: Checkpoint[];
+  feature?: string;
 };
 
 export type CaseCard = {
@@ -28,52 +40,153 @@ export type CaseCard = {
   destroy(): void;
 };
 
+const ISSUE_URL = "https://github.com/anthropics/typora-web/issues/new";
+
+function escapeHTML(s: string): string {
+  return s.replace(/[&<>"']/g, (c) =>
+    c === "&" ? "&amp;"
+      : c === "<" ? "&lt;"
+      : c === ">" ? "&gt;"
+      : c === '"' ? "&quot;"
+      : "&#39;",
+  );
+}
+
+function previewSeed(seed: string): string {
+  if (!seed) return "(empty)";
+  const oneLine = seed.replace(/\n/g, "↵");
+  return oneLine.length > 56 ? oneLine.slice(0, 53) + "…" : oneLine;
+}
+
 export function createCaseCard(
   script: Script,
   getSpeed: () => number,
 ): CaseCard {
+  const checkpoints = script.checkpoints ?? [];
+  const lastCp = checkpoints[checkpoints.length - 1];
+
   const el = document.createElement("div");
   el.className = "case-card";
   el.innerHTML = `
     <div class="case-head">
-      <code class="case-label"></code>
+      <div class="case-title">
+        <span class="case-label"></span>
+        <span class="case-meta">
+          <span class="case-seed" title="seed"></span>
+          <span class="case-evcount" title="events"></span>
+        </span>
+      </div>
       <div class="case-controls">
+        <span class="case-match" title="matches nearest checkpoint"></span>
+        <span class="case-progress"></span>
+        <code class="case-next"></code>
         <button data-act="reset" title="Reset">↺</button>
         <button data-act="step" title="Step">▸</button>
         <button data-act="play" title="Play">▶</button>
-        <span class="case-progress"></span>
-        <code class="case-next"></code>
       </div>
     </div>
     <div class="case-body">
       <div class="case-editor"></div>
-      <details class="case-dumps">
-        <summary>pretty + md</summary>
-        <div class="dump-wrap">
-          <button class="copy-btn copy-btn-corner" data-copy-sibling="pretty">copy</button>
-          <pre class="case-pretty wrap-pre"></pre>
-        </div>
-        <div class="dump-wrap">
-          <button class="copy-btn copy-btn-corner" data-copy-sibling="md">copy</button>
-          <pre class="case-md wrap-pre"></pre>
-        </div>
-      </details>
+      <div class="case-foot">
+        <details class="case-dumps">
+          <summary>pretty + md</summary>
+          <div class="dump-wrap">
+            <button class="copy-btn copy-btn-corner" data-copy="pretty">copy</button>
+            <pre class="case-pretty wrap-pre"></pre>
+          </div>
+          <div class="dump-wrap">
+            <button class="copy-btn copy-btn-corner" data-copy="md">copy</button>
+            <pre class="case-md wrap-pre"></pre>
+          </div>
+        </details>
+        ${checkpoints.length
+          ? `<details class="case-checkpoints">
+              <summary>checkpoints <span class="cp-count">${checkpoints.length}</span></summary>
+              <ol class="cp-list"></ol>
+            </details>`
+          : ""}
+        <a class="case-issue" target="_blank" rel="noopener">report</a>
+      </div>
     </div>
   `;
   (el.querySelector(".case-label") as HTMLElement).textContent = script.label;
+  const $seed = el.querySelector(".case-seed") as HTMLElement;
+  $seed.textContent = previewSeed(script.seed);
+  if (!script.seed) $seed.classList.add("is-empty");
+  (el.querySelector(".case-evcount") as HTMLElement).textContent =
+    `${script.events.length} ev`;
 
   const $editor = el.querySelector(".case-editor") as HTMLDivElement;
   const $pretty = el.querySelector(".case-pretty") as HTMLElement;
   const $md = el.querySelector(".case-md") as HTMLElement;
   const $progress = el.querySelector(".case-progress") as HTMLElement;
   const $next = el.querySelector(".case-next") as HTMLElement;
+  const $match = el.querySelector(".case-match") as HTMLElement;
   const $reset = el.querySelector('[data-act="reset"]') as HTMLButtonElement;
   const $step = el.querySelector('[data-act="step"]') as HTMLButtonElement;
   const $play = el.querySelector('[data-act="play"]') as HTMLButtonElement;
+  const $issue = el.querySelector(".case-issue") as HTMLAnchorElement;
+  const $cpList = el.querySelector(".cp-list") as HTMLOListElement | null;
+
+  if ($cpList) {
+    $cpList.innerHTML = checkpoints
+      .map(
+        (c) =>
+          `<li data-at="${c.at}"><span class="cp-at">@${c.at}</span><code class="cp-expect">${escapeHTML(c.expect)}</code></li>`,
+      )
+      .join("");
+  }
 
   let view: EditorView | null = null;
   let cursorIndex = 0;
   let playTimer: number | null = null;
+
+  function nearestCheckpoint(): Checkpoint | undefined {
+    if (!checkpoints.length) return undefined;
+    // largest cp.at <= cursorIndex; fall back to first cp if we haven't reached any yet.
+    let best: Checkpoint | undefined;
+    for (const cp of checkpoints) {
+      if (cp.at <= cursorIndex) best = cp;
+      else break;
+    }
+    return best ?? checkpoints[0];
+  }
+
+  function buildIssueHref(observedPretty: string): string {
+    const cp = lastCp;
+    const title = `[spec] ${script.feature ?? ""} / ${script.label}`.trim();
+    const body = [
+      `**Spec id:** \`${script.id}\``,
+      script.feature ? `**Feature:** \`${script.feature}\`` : "",
+      "",
+      "**Seed:**",
+      "```md",
+      script.seed || "(empty)",
+      "```",
+      "",
+      "**Events:**",
+      "```ts",
+      JSON.stringify(script.events),
+      "```",
+      "",
+      cp ? `**Expected pretty (final checkpoint @${cp.at}):**` : "",
+      cp ? "```\n" + cp.expect + "\n```" : "",
+      "",
+      "**Observed pretty:**",
+      "```",
+      observedPretty,
+      "```",
+      "",
+      "**What's wrong:**",
+      "<!-- describe the divergence -->",
+    ]
+      .filter((s) => s !== "")
+      .join("\n");
+    const u = new URL(ISSUE_URL);
+    u.searchParams.set("title", title);
+    u.searchParams.set("body", body);
+    return u.toString();
+  }
 
   function mount(): void {
     const doc: PMNode = script.seed
@@ -103,11 +216,37 @@ export function createCaseCard(
     const done = cursorIndex >= script.events.length;
     $progress.textContent = `${cursorIndex}/${script.events.length}`;
     $next.textContent = done ? "—" : String(script.events[cursorIndex]!);
-    $pretty.textContent = pretty(view.state);
+    const observed = pretty(view.state);
+    $pretty.textContent = observed;
     $md.textContent = serialize(view.state.doc);
     $step.disabled = done;
     $play.disabled = done;
     el.classList.toggle("done", done);
+
+    // Live spec match. Empty when there's no checkpoint reachable yet.
+    const cp = nearestCheckpoint();
+    if (cp && cursorIndex >= cp.at) {
+      const ok = observed === cp.expect;
+      $match.textContent = ok ? "✓" : "✗";
+      $match.title = ok
+        ? `matches checkpoint @${cp.at}`
+        : `expected @${cp.at}: ${cp.expect}`;
+      $match.classList.toggle("ok", ok);
+      $match.classList.toggle("bad", !ok);
+    } else {
+      $match.textContent = "";
+      $match.classList.remove("ok", "bad");
+    }
+
+    // Highlight the current row in the checkpoints panel.
+    if ($cpList) {
+      for (const li of $cpList.querySelectorAll<HTMLLIElement>("li")) {
+        const at = Number(li.dataset.at);
+        li.classList.toggle("is-current", cp ? at === cp.at : false);
+      }
+    }
+
+    $issue.href = buildIssueHref(observed);
   }
 
   function stepOnce(): boolean {
@@ -142,6 +281,40 @@ export function createCaseCard(
     stepOnce();
   });
   $play.addEventListener("click", () => setPlaying(playTimer === null));
+
+  // Click a checkpoint row to fast-forward to that point.
+  if ($cpList) {
+    $cpList.addEventListener("click", (e) => {
+      const li = (e.target as HTMLElement).closest("li[data-at]") as HTMLLIElement | null;
+      if (!li) return;
+      const target = Number(li.dataset.at);
+      setPlaying(false);
+      mount();
+      while (cursorIndex < target) {
+        if (!stepOnce()) break;
+      }
+    });
+  }
+
+  // Copy buttons (scoped per card).
+  el.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".copy-btn");
+    if (!btn) return;
+    const which = btn.dataset.copy;
+    const text =
+      which === "pretty" ? $pretty.textContent ?? ""
+      : which === "md" ? $md.textContent ?? ""
+      : "";
+    if (!text) return;
+    navigator.clipboard?.writeText(text).then(
+      () => {
+        const orig = btn.textContent;
+        btn.textContent = "copied";
+        setTimeout(() => { btn.textContent = orig; }, 900);
+      },
+      () => {},
+    );
+  });
 
   mount();
 

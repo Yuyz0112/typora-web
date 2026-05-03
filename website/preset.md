@@ -2,85 +2,126 @@
 
 [toc]
 
-**typora-web** is a faithful port of [Typora][typora]'s WYSIWYG markdown editing into the browser, built on **ProseMirror**. What you're reading now *is* the editor — click anywhere and start typing. Press `⌘/` (or `Ctrl+/`) at any time to flip between rendered and source view.
+**typora-web** is a WYSIWYG Markdown editor for the browser, modeled on [Typora][typora] and built on [ProseMirror][pmguide]. The page you're reading is the editor itself — click anywhere and start typing. Source and rendered view are the same view: `*em*` becomes *em* in place, the `*` chars stay in the document, and they fade in only when the cursor is near them.
 
-<!-- this whole page is the live demo; edit freely, the source round-trips -->
+Under the hood it's a structured ProseMirror document with a Markdown parser/serializer pinned together so `parse → serialize → parse` produces an identical doc. That means you can edit visually without ever losing the original source shape, and you can pop into raw view at any moment to confirm.
 
-## Why another editor?
+<!-- this whole page is the live demo; edit freely -->
 
-Typora set the bar for **inline-rendered** markdown: you see ==highlighted== prose, ~~struck-through~~ drafts, and `inline code` exactly where you wrote them, with raw `*` and `_` only peeking out when the cursor is nearby. Porting that feel to the web — losslessly, on a real structured document model — turns out to be a deep problem. We're working through it one behavior at a time.
+## Try it
 
-The pitch in one line: **every supported syntax is a spec, and every spec is a scripted scenario ported from observed Typora behavior**.
+Inline marks render where you typed them: **bold**, *italic*, `inline code`, ~~strike~~, ==highlight==, sub like H~2~O and sup like E = mc^2^. Paste a bare URL in angle brackets and it lights up: <https://prosemirror.net>. Regular links work too — see the [ProseMirror guide][pmguide] or the [CommonMark spec][cm]. Emoji shortcodes resolve as you type: :books: :tada: :hourglass: :warning:.
 
-## How we work
+Task lists hold state visually:
 
-We do **spec-TDD**. A spec is a seed string + an event sequence + checkpoints describing what the rendered DOM should look like at each step. The editor has to make that scenario pass before we call the syntax done. To browse the catalog of what's covered, [browse the catalog](#/specs).
+- [x] inline marks (em, strong, code, strike, highlight, sub/sup)
+- [x] autolinks and reference-style links
+- [x] tables with per-column alignment
+- [ ] inline and block math (planned, KaTeX-based)
+- [ ] diagram fences like mermaid (planned, opt-in)
 
-Found a Typora behavior we *don't* match? File it as a new spec — same shape — and we'll work it red→green. Bug reports, feature requests, and "Typora does X but you do Y" reports all flow through the same channel. :bug:
+Lists nest, and exit on a triple-Enter staircase the way Typora does:
 
-## What you can try right now
+1. outer ordered item
+   - nested bullet with a `code span`
+   - another, with **bold** in it
+     1. third level
+2. back to the outer list
 
-- [x] type `**bold**`, `*italic*`, `~~strike~~`, `==highlight==`, `` `code` ``
-- [x] superscript like E = mc^2^ and subscripts like H~2~O
-- [x] paste a URL inside angle brackets: <https://prosemirror.net>
-- [x] regular links like the [ProseMirror guide](https://prosemirror.net/docs/guide/ "PM docs")
-- [x] emoji shortcodes — :tada: :books: :hourglass: :warning: :white_check_mark:
-- [ ] inline math `$x^2$` (deferred; KaTeX plugin planned)
-- [ ] diagram fences (mermaid/flow; deferred to opt-in plugin)
-
-### Nested lists & blockquotes work too
-
-1. Top-level ordered item
-   - nested bullet, with a `code span` inside
-   - another nested bullet, **bold** here
-     1. and a third level
-2. Back to the outer list
-
-> Typora's blockquote feel — gray rule on the left, inline marks rendered in place. Quotes nest, and you can drop ==highlights== or [links](https://typora.io) inside without breaking the source.
+> Blockquotes render inline marks in place, just like paragraphs. You can drop ==highlights==, [links](https://typora.io), or `code` into a quote and the source still round-trips byte-for-byte.
 >
-> Press Enter twice to exit, just like in Typora. Round-trip is a hard invariant: `parse → serialize → parse` must produce an identical PM doc, tested on every commit.
+> Press Enter on an empty quote line to exit.
 
 ---
 
-## Compatibility snapshot
+## Editor behaviors
 
-A representative slice of [`SYNTAX.md`](https://github.com/) — see the repo for the full matrix.
+A few interactions worth knowing:
 
-| Family            | Example                  | Status |
-| ----------------- | ------------------------ | :----: |
-| inline marks      | `*em*`, `**strong**`     |  :white_check_mark:   |
-| inline code       | `` `x` ``                |  :white_check_mark:   |
-| Typora highlight  | `==x==`                  |  :white_check_mark:   |
-| sub / sup         | `H~2~O`, `x^2^`          |  :white_check_mark:   |
-| autolink          | `<https://…>`            |  :white_check_mark:   |
-| task list         | `- [ ]` / `- [x]`        |  :white_check_mark:   |
-| nested list exit  | 3-step staircase         |  :white_check_mark:   |
-| fenced code + lang| ```` ```ts ````          |  :white_check_mark:   |
-| table + alignment | this table               |  :white_check_mark:   |
-| TOC               | `[toc]`                  |  :white_check_mark:   |
-| inline / block math | `$x$`, `$$…$$`         |   :hourglass:    |
-| HTML block        | raw `<div>`              |   :hourglass:    |
+- **`⌘/`** (or `Ctrl+/`) toggles between rendered and raw source view.
+- **`⌘`-click** a link to open it; plain click places the cursor inside, where the URL becomes editable.
+- **Click a task checkbox** to toggle done/undone — no need to edit the `[ ]`.
+- **Inside a table**: `Tab` / `Shift+Tab` moves between cells; the floating toolbar on focus has a hover-grid resizer, per-column alignment, and delete. Boundary cells consume `Tab` without escaping the table.
+- **Inside a fenced code block**: the language tag is an editable input; `↑` / `↓` at the first/last line crosses the fence into surrounding paragraphs.
+- **Auto-pairing** for `[` and `(` — type the opener, get the closer; type the closer over an existing one to skip; `Backspace` removes both.
+- **`[toc]`** on its own line becomes a live table of contents; click an entry to jump.
 
-## A taste of fenced code
+For a behavior catalog browsable in-app, open [`#/specs`](#/specs).
 
-Lang is editable; arrow keys cross the fence boundary like in Typora.
+## Coverage
 
-```ts
-import { EditorState } from "prosemirror-state";
-import { defaultPlugins } from "./editor";
+Legend: :white_check_mark: stable · :yellow_circle: partial (note explains what's missing) · :pause_button: deferred by design.
 
-// every transaction runs `normalize`, which derives marks from text.
-const state = EditorState.create({ schema, plugins: defaultPlugins() });
-```
+### Block syntax
 
-## Reading list
+| Syntax | Status | Notes |
+|---|:---:|---|
+| paragraph | :white_check_mark: | trailing-space preserved |
+| ATX heading `#`..`######` | :white_check_mark: | |
+| setext heading (`===` / `---` underline) | :white_check_mark: | parser-only; underline shape preserved on save |
+| blockquote `>` | :white_check_mark: | nests, inline marks render inside |
+| bullet list `-` `*` `+` | :white_check_mark: | tight/loose distinction not asserted |
+| ordered list `1.` | :white_check_mark: | |
+| nested list | :white_check_mark: | Typora-style 3-step staircase exit |
+| task list `- [ ]` / `- [x]` | :white_check_mark: | click checkbox to toggle |
+| fenced code ```` ``` ```` | :white_check_mark: | editable lang tag, arrow-key crossing |
+| indented code (4-space) | :yellow_circle: | parses fine; saves as fenced (shape attr not yet preserved) |
+| thematic break `---` | :white_check_mark: | |
+| table `\| a \| b \|` | :white_check_mark: | alignment, inline marks in cells, floating toolbar |
+| YAML front matter | :white_check_mark: | only at doc start, body text preserved |
+| reference link def `[id]: url` | :yellow_circle: | live entry committed as block; reload drops the def node (markdown-it consumes it on parse) |
+| HTML block | :pause_button: | needs sanitizer policy; planned as opt-in plugin |
+| math block `$$…$$` | :pause_button: | planned as opt-in KaTeX plugin |
 
-Markdown is a deceptively deep target — these helped shape our model:
+### Inline syntax
+
+| Syntax | Status | Notes |
+|---|:---:|---|
+| em `*x*` / `_x_` | :white_check_mark: | |
+| strong `**x**` / `__x__` | :white_check_mark: | |
+| nested `***em+strong***` | :yellow_circle: | works only when both runs ≥ 3 chars; full rule-of-three pending |
+| inline code `` `x` `` | :white_check_mark: | variable-length fence supported |
+| strike `~~x~~` | :white_check_mark: | |
+| link `[text](url)` | :yellow_circle: | edge cases: nested `]`, `\]` escape, hrefs with spaces |
+| link with title `[t](u "title")` | :white_check_mark: | |
+| empty-text link `[](url)` | :white_check_mark: | href becomes the visible link text |
+| image `![alt](src)` | :white_check_mark: | async load probe, broken-icon fallback, file-input edit mode |
+| autolink `<https://x.com>` | :white_check_mark: | URL and email; email gets `mailto:` prefix |
+| reference-style link `[t][id]` | :yellow_circle: | resolves to inline link on parse; def block is the :yellow_circle: piece |
+| hard break (2-space + `\n`) | :white_check_mark: | |
+| soft break (`\n` in para) | :white_check_mark: | |
+| backslash escape `\*` | :yellow_circle: | round-trip works; no input-time UX |
+| inline HTML | :pause_button: | paired with HTML block decision |
+| inline math `$x$` | :pause_button: | planned with math block |
+
+### Typora extensions
+
+| Syntax | Status | Notes |
+|---|:---:|---|
+| highlight `==x==` | :white_check_mark: | |
+| subscript `~x~` | :white_check_mark: | single-tilde only; `~~~x~~~` falls through |
+| superscript `^x^` | :white_check_mark: | |
+| `[toc]` block | :white_check_mark: | live, click entries to scroll |
+| emoji `:smile:` | :white_check_mark: | autocomplete dropdown while typing `:partial`; Tab/Enter commits |
+| HTML comment `<!-- -->` | :white_check_mark: | rendered as gray italic, always visible |
+| diagram fences (mermaid, flow, …) | :pause_button: | planned as opt-in plugin (heavy renderer) |
+
+### Editor behaviors
+
+| Behavior | Status | Notes |
+|---|:---:|---|
+| cursor-aware delimiter hinting | :white_check_mark: | gray `*` / `==` / `` ` `` etc. when cursor is inside the span |
+| auto-pair brackets | :white_check_mark: | `[`/`(` open, skip-over close, Backspace clears both |
+| lossless `parse → serialize → parse` | :white_check_mark: | enforced by test suite on every commit |
+
+## Reading
+
+Markdown looks small and turns out to be deep. These were useful while building this:
 
 - the [CommonMark spec][cm] for the parts everyone agrees on
-- Typora's own help docs for the parts only Typora does
-- ProseMirror's [guide][pmguide] for the doc/transaction discipline that makes round-trip possible :books:
+- [Typora][typora]'s help docs for the parts only Typora does
+- ProseMirror's [guide][pmguide] for the document and transaction model that makes lossless editing tractable :books:
 
-[typora]: https://typora.io
-[cm]: https://spec.commonmark.org/
-[pmguide]: https://prosemirror.net/docs/guide/
+[typora]: https://typora.io "Typora"
+[cm]: https://spec.commonmark.org/ "CommonMark"
+[pmguide]: https://prosemirror.net/docs/guide/ "ProseMirror Guide"

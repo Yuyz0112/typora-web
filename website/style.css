@@ -140,29 +140,76 @@ html, body {
 }
 
 /* ─── specs catalog ──────────────────────────────────────────────── */
-.specs-header { margin-bottom: 48px; }
+.specs-header { margin-bottom: 36px; }
 .specs-header h1 {
   font-size: 32px;
   font-weight: 600;
   letter-spacing: -0.02em;
-  margin: 0 0 16px;
+  margin: 0 0 14px;
   line-height: 1.2;
 }
-.specs-meta { color: #888; font-size: 14px; margin: 0 0 6px; line-height: 1.55; }
-.specs-controls {
+.specs-meta {
+  color: #777;
+  font-size: 14px;
+  margin: 0 0 22px;
+  line-height: 1.55;
+  max-width: 56ch;
+}
+.specs-meta strong {
+  color: #1f1f1f;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.specs-toolbar {
   display: flex;
-  gap: 12px;
+  gap: 16px;
   align-items: center;
-  margin-top: 24px;
+  flex-wrap: wrap;
   font-size: 12px;
   color: #999;
 }
-.specs-controls .global-speed {
+.specs-filter {
+  flex: 1;
+  min-width: 200px;
+  border: none;
+  background: transparent;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+  padding: 6px 2px;
+  font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "Helvetica Neue", system-ui, sans-serif;
+  color: #1f1f1f;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.specs-filter::placeholder { color: #b5b5b5; }
+.specs-filter:focus { border-bottom-color: #1f1f1f; }
+.specs-toolbar .global-speed {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  white-space: nowrap;
 }
-.specs-controls input[type="range"] { width: 120px; }
+.specs-toolbar .global-speed > span:first-child { color: #aaa; }
+.specs-toolbar input[type="range"] { width: 96px; }
+
+.specs-footer {
+  margin-top: 64px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  font-size: 12.5px;
+  color: #999;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.specs-footer a {
+  color: #555;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.15);
+}
+.specs-footer a:hover { color: #1f1f1f; border-bottom-color: #1f1f1f; }
+
+.hidden { display: none !important; }
 
 /* The spec catalog flows like a TOC — featherweight separators between
  * groups; no card chrome, no borders inside group bodies. */
@@ -171,9 +218,9 @@ html, body {
 }
 .spec-group > summary {
   cursor: pointer;
-  padding: 16px 0;
+  padding: 14px 0;
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 12px;
   list-style: none;
 }
@@ -186,6 +233,7 @@ html, body {
   transition: transform 0.18s;
   font-size: 18px;
   line-height: 1;
+  align-self: center;
 }
 .spec-group[open] > summary::before { transform: rotate(90deg); }
 .spec-group-name {
@@ -195,41 +243,82 @@ html, body {
   letter-spacing: -0.005em;
 }
 .spec-group-count {
-  color: #aaa;
-  font-size: 12px;
+  color: #b5b5b5;
+  font-size: 11.5px;
   font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+.spec-group-desc {
+  color: #999;
+  font-size: 13px;
+  font-weight: 400;
+  margin-left: auto;
+  text-align: right;
+  max-width: 56ch;
+  line-height: 1.4;
 }
 .spec-group-body {
-  padding: 0 0 24px 26px;
+  padding: 4px 0 28px 26px;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 28px;
 }
 
 /* ─── case card — borderless, separated by whitespace ─────────────── */
 .case-card { font-size: 13px; }
-.case-card.done .case-progress { color: #aaa; }
+.case-card.done .case-progress { color: #b5b5b5; }
 .case-head {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
-  gap: 12px;
-  margin-bottom: 10px;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 6px;
   flex-wrap: wrap;
 }
+.case-title {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+}
 .case-label {
-  color: #555;
-  font: 12.5px/1.5 ui-monospace, monospace;
+  color: #1f1f1f;
+  font-size: 13.5px;
+  line-height: 1.4;
+}
+.case-meta {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #aaa;
+}
+.case-seed {
+  color: #888;
+  background: rgba(0, 0, 0, 0.035);
+  padding: 1px 6px;
+  border-radius: 3px;
+  max-width: 40ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.case-seed.is-empty { color: #bbb; font-style: italic; }
+.case-evcount {
+  color: #aaa;
+  font-variant-numeric: tabular-nums;
 }
 .case-controls {
   display: flex;
-  gap: 2px;
+  gap: 4px;
   align-items: center;
   font-size: 12px;
   color: #999;
+  flex-shrink: 0;
 }
 .case-controls button {
-  padding: 2px 8px;
+  padding: 2px 7px;
   border: none;
   background: transparent;
   cursor: pointer;
@@ -255,13 +344,123 @@ html, body {
   font: 11px ui-monospace, monospace;
   color: #888;
   padding: 0 4px;
+  min-width: 14px;
+  text-align: center;
 }
-.case-body { display: flex; flex-direction: column; gap: 6px; }
-.case-editor { padding: 8px 0; }
+.case-match {
+  display: inline-block;
+  min-width: 14px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+}
+.case-match.ok { color: #4a9d6f; }
+.case-match.bad { color: #c25656; }
+
+.case-body { display: flex; flex-direction: column; gap: 4px; }
+.case-editor {
+  padding: 6px 0;
+  border-left: 1px solid rgba(0, 0, 0, 0.05);
+  padding-left: 14px;
+}
 .case-editor .ProseMirror { min-height: 24px; outline: none; font-size: 13px; }
 .case-editor .ProseMirror p { margin: 2px 0; }
-.case-dumps { font-size: 11.5px; color: #aaa; margin-top: 4px; }
-.case-dumps > summary { cursor: pointer; padding: 2px 0; }
+
+.case-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  font-size: 11.5px;
+  color: #aaa;
+  margin-top: 2px;
+}
+.case-foot > details { flex: 0 0 auto; }
+.case-foot > .case-issue { margin-left: auto; }
+
+.case-dumps,
+.case-checkpoints {
+  font-size: 11.5px;
+  color: #aaa;
+}
+.case-dumps > summary,
+.case-checkpoints > summary {
+  cursor: pointer;
+  padding: 2px 0;
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #888;
+  user-select: none;
+}
+.case-dumps > summary::-webkit-details-marker,
+.case-checkpoints > summary::-webkit-details-marker { display: none; }
+.case-dumps > summary::before,
+.case-checkpoints > summary::before {
+  content: "+";
+  display: inline-block;
+  width: 9px;
+  color: #c5c5c5;
+  font-size: 13px;
+  line-height: 1;
+  text-align: center;
+}
+.case-dumps[open] > summary::before,
+.case-checkpoints[open] > summary::before { content: "−"; }
+
+.cp-count {
+  color: #b5b5b5;
+  font-variant-numeric: tabular-nums;
+}
+.cp-list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cp-list li {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 3px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.cp-list li:hover { background: rgba(0, 0, 0, 0.03); }
+.cp-list li.is-current { background: rgba(0, 0, 0, 0.05); }
+.cp-at {
+  color: #b5b5b5;
+  font: 11px ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  min-width: 28px;
+  flex-shrink: 0;
+}
+.cp-expect {
+  font: 11.5px/1.5 ui-monospace, monospace;
+  color: #555;
+  background: transparent;
+  padding: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.case-issue {
+  font-size: 11.5px;
+  color: #aaa;
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: color 0.12s, border-color 0.12s;
+}
+.case-issue:hover {
+  color: #555;
+  border-bottom-color: rgba(0, 0, 0, 0.15);
+}
+
 .dump-wrap { position: relative; margin: 4px 0; }
 .case-pretty,
 .case-md {
