@@ -92,29 +92,73 @@ html, body { margin: 0; padding: 0; font: 16px/1.6 -apple-system, system-ui, san
   font-style: italic;
 }
 
-/* Reference link definition — atom block. The `[`, `]`, `:` decoration
- * comes from CSS so the user can't navigate into them; the label and
- * url stay as visible spans (read-only since the parent is contenteditable
- * false). */
+/* Reference link definition — structured block. The container `<ref-def>`
+ * lays out three editable textblocks (label / url / title) on one line.
+ * `[`, `]:`, `"` chrome is CSS ::before/::after on the part elements so
+ * the glyphs aren't navigable. Empty url/title slots get a `data-
+ * placeholder` attr from the decoration plugin and render the ghost
+ * text via the same ::before mechanism. */
 .ProseMirror ref-def {
   display: block;
   margin: 4px 0;
   font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
-  color: #555;
-  user-select: none;
+  color: #444;
 }
-.ProseMirror ref-def .ref-def-label::before {
+.ProseMirror ref-label,
+.ProseMirror ref-url,
+.ProseMirror ref-title {
+  display: inline-block;
+  min-width: 1em;
+}
+/* `[ ` ... ` ]: ` around the label part. */
+.ProseMirror ref-label::before {
   content: "[ ";
   color: #b0b0b0;
-  font-style: italic;
+  user-select: none;
 }
-.ProseMirror ref-def .ref-def-label::after {
+.ProseMirror ref-label::after {
   content: " ]: ";
   color: #b0b0b0;
-  font-style: italic;
+  user-select: none;
 }
-.ProseMirror ref-def .ref-def-url { color: #0969da; }
-.ProseMirror ref-def .ref-def-title { color: #888; font-style: italic; }
+.ProseMirror ref-url { color: #0969da; }
+/* Empty url placeholder — gray italic underlined. The data-placeholder
+ * attr is set only when the node has no content. */
+.ProseMirror ref-url[data-placeholder]::before {
+  content: attr(data-placeholder);
+  color: #b0b0b0;
+  font-style: italic;
+  text-decoration: underline;
+  user-select: none;
+}
+/* `"` chrome around the title; placeholder lives inside the quotes. */
+.ProseMirror ref-title { color: #555; padding-left: 0.6em; }
+.ProseMirror ref-title::before {
+  content: '" ';
+  color: #b0b0b0;
+  user-select: none;
+}
+.ProseMirror ref-title::after {
+  content: ' "';
+  color: #b0b0b0;
+  user-select: none;
+}
+.ProseMirror ref-title[data-placeholder]::before {
+  content: '" ' attr(data-placeholder) ' "';
+  color: #b0b0b0;
+  font-style: italic;
+  user-select: none;
+}
+.ProseMirror ref-title[data-placeholder]::after {
+  content: "";
+}
+/* Hide PM's empty-textblock placeholder break inside ref parts so the
+ * `:empty`-style placeholders aren't broken by an injected <br>. */
+.ProseMirror ref-label > .ProseMirror-trailingBreak,
+.ProseMirror ref-url > .ProseMirror-trailingBreak,
+.ProseMirror ref-title > .ProseMirror-trailingBreak {
+  display: none;
+}
 
 /* GFM table — minimal styling so the structure is visible. */
 .ProseMirror table {

@@ -1,41 +1,39 @@
+import type { Node as PMNode, Schema } from "prosemirror-model";
 import { Plugin, TextSelection } from "prosemirror-state";
 import { Decoration, DecorationSet } from "prosemirror-view";
 
 import type { FeatureSpec } from "./_types.ts";
 
-// Reference link definition `[label]: url ["title"]` — live editor input.
+// Reference link definition `[label]: url ["title"]` — live UX.
+//
+// Schema (structured):
+//   link_def
+//     ref_label  (text*)   the part inside `[ ]:`
+//     ref_url    (text*)   underlined plain url
+//     ref_title  (text*)   inside `" "`, optional
 //
 // Two phases:
-//   1. **Draft**: as the user types in a paragraph and the textContent
-//      starts matching `^\[<label>\]:`, the syntax chars (`[`, `]`, `:`)
-//      get a `syntax-hint-italic` class — gray + italic, the canonical
-//      "you're in a special-syntax line" hint. The label and any url
-//      typed after stay as normal text, fully editable.
-//   2. **Commit on Enter**: when the textContent matches the full
-//      pattern `^\[<label>\]:\s+<url>(\s+"<title>")?\s*$`, Enter swaps
-//      the paragraph for an atom `link_def` block; cursor lands in a
-//      fresh paragraph below.
 //
-// Atom block render: a `<ref-def>` element with the label and url as
-// editable-looking spans; the surrounding `[`, `]`, `:` glyphs come
-// from CSS `::before`/`::after` decoration so the user can't navigate
-// into them. Pretty: `<ref>label</ref> url`.
+//   1. **Draft**: typing in a paragraph whose text matches `^\[<label>\]:`
+//      decorates the syntax chars (`[`, `]:`) with `syntax-hint-italic`.
+//      Pretty: `<gi>[</gi>label<gi>]:</gi>...`.
 //
-// Round-trip caveat: serializes to `[label]: url` and the matching
-// md-it parse rule consumes it silently (so on reload the def node
-// is dropped, while the inline `[text][label]` references still
-// resolve to inline links via md-it's resolver). True preservation
-// would need a custom md-it block rule + a parserPostProcess; that's
-// a phase-2 follow-up.
+//   2. **Commit on Enter**: paragraph text matching the full pattern
+//      `^\[<label>\]:\s+<url>(\s+"<title>")?\s*$` is swapped for a
+//      structured `link_def` block. The user can still edit each part
+//      after commit; empty url / title show grayed placeholders. Cursor
+//      lands in the new link_def's label so a follow-up Tab / arrow
+//      moves through the parts.
+//
+//   3. **Enter inside link_def** (post-commit): when the url part has
+//      content, Enter creates a new empty link_def below and parks the
+//      cursor in its label — chains entries with no manual draft.
+//
+// Block serializer walks children → `[label]: url ["title"]`. Title is
+// emitted only if non-empty.
 
-// Draft trigger: at minimum `[<at least one char>]:`. Url after is
-// optional during draft.
 const REF_DRAFT_RE = /^\[([^\]]+)\]:/;
-
-// Full commit pattern: label, colon, whitespace, url (no spaces),
-// optional `"title"`. Anchored to the whole line.
-const REF_COMMIT_RE =
-  /^\[([^\]]+)\]:\s+(\S+)(?:\s+"([^"]*)")?\s*$/;
+const REF_COMMIT_RE = /^\[([^\]]+)\]:\s+(\S+)(?:\s+"([^"]*)")?\s*$/;
 
 function refDraftPlugin(): Plugin {
   return new Plugin({
@@ -43,29 +41,46 @@ function refDraftPlugin(): Plugin {
       decorations(state) {
         const decos: Decoration[] = [];
         state.doc.descendants((node, pos) => {
-          if (node.type.name !== "paragraph") return true;
-          const text = node.textContent;
-          const m = REF_DRAFT_RE.exec(text);
-          if (!m) return false;
-          // Inside the paragraph: pos+1 = first char (the `[`).
-          const start = pos + 1;
-          const labelLen = m[1]!.length;
-          const openBracket = start;
-          const closeBracket = start + 1 + labelLen;
-          const colon = closeBracket + 1;
-          decos.push(
-            Decoration.inline(openBracket, openBracket + 1, {
-              class: "syntax-hint-italic",
-            }),
-          );
-          // `]:` as one range so PM renders a single <span> — separate
-          // decorations would each get their own wrapper.
-          decos.push(
-            Decoration.inline(closeBracket, colon + 1, {
-              class: "syntax-hint-italic",
-            }),
-          );
-          return false;
+          // Draft decorations on paragraphs that look like a starting
+          // ref-def (text starts with `[<something>]:`).
+          if (node.type.name === "paragraph") {
+            const text = node.textContent;
+            const m = REF_DRAFT_RE.exec(text);
+            if (!m) return false;
+            const start = pos + 1;
+            const labelLen = m[1]!.length;
+            const openBracket = start;
+            const closeBracket = start + 1 + labelLen;
+            const colonEnd = closeBracket + 2; // `]:`
+            decos.push(
+              Decoration.inline(openBracket, openBracket + 1, {
+                class: "syntax-hint-italic",
+              }),
+            );
+            decos.push(
+              Decoration.inline(closeBracket, colonEnd, {
+                class: "syntax-hint-italic",
+              }),
+            );
+            return false;
+          }
+          // Placeholder attrs on empty url / title nodes — CSS reads
+          // `data-placeholder` and renders ghost text via ::before.
+          if (
+            (node.type.name === "ref_url" || node.type.name === "ref_title") &&
+            node.content.size === 0
+          ) {
+            const placeholder =
+              node.type.name === "ref_url"
+                ? "input link url here"
+                : "title (optional)";
+            decos.push(
+              Decoration.node(pos, pos + node.nodeSize, {
+                "data-placeholder": placeholder,
+              }),
+            );
+          }
+          return true;
         });
         return decos.length > 0
           ? DecorationSet.create(state.doc, decos)
@@ -75,51 +90,48 @@ function refDraftPlugin(): Plugin {
   });
 }
 
+function buildLinkDef(
+  schema: Schema,
+  label: string,
+  href: string,
+  title: string,
+): PMNode {
+  return schema.nodes.link_def.createChecked(null, [
+    schema.nodes.ref_label.create(null, label ? [schema.text(label)] : []),
+    schema.nodes.ref_url.create(null, href ? [schema.text(href)] : []),
+    schema.nodes.ref_title.create(null, title ? [schema.text(title)] : []),
+  ]);
+}
+
 export const refDef: FeatureSpec = {
   name: "ref-def",
 
   nodes: {
     link_def: {
       group: "block",
-      atom: true,
-      selectable: true,
+      content: "ref_label ref_url ref_title",
       defining: true,
-      attrs: {
-        label: {},
-        href: {},
-        title: { default: null },
-      },
-      parseDOM: [
-        {
-          tag: "ref-def",
-          getAttrs: (el) => ({
-            label: (el as HTMLElement).getAttribute("data-label") ?? "",
-            href: (el as HTMLElement).getAttribute("data-href") ?? "",
-            title: (el as HTMLElement).getAttribute("data-title") || null,
-          }),
-        },
-      ],
-      toDOM: (node) => {
-        const label = node.attrs.label as string;
-        const href = node.attrs.href as string;
-        const title = node.attrs.title as string | null;
-        const dataAttrs: Record<string, string> = {
-          "data-label": label,
-          "data-href": href,
-          contenteditable: "false",
-        };
-        if (title) dataAttrs["data-title"] = title;
-        const children: Array<unknown> = [
-          ["span", { class: "ref-def-label" }, label],
-          " ",
-          ["span", { class: "ref-def-url" }, href],
-        ];
-        if (title) {
-          children.push(" ");
-          children.push(["span", { class: "ref-def-title" }, `"${title}"`]);
-        }
-        return ["ref-def", dataAttrs, ...(children as never[])];
-      },
+      isolating: true,
+      parseDOM: [{ tag: "ref-def" }],
+      toDOM: () => ["ref-def", 0],
+    },
+    ref_label: {
+      content: "text*",
+      defining: true,
+      parseDOM: [{ tag: "ref-label" }],
+      toDOM: () => ["ref-label", 0],
+    },
+    ref_url: {
+      content: "text*",
+      defining: true,
+      parseDOM: [{ tag: "ref-url" }],
+      toDOM: () => ["ref-url", 0],
+    },
+    ref_title: {
+      content: "text*",
+      defining: true,
+      parseDOM: [{ tag: "ref-title" }],
+      toDOM: () => ["ref-title", 0],
     },
   },
 
@@ -130,38 +142,61 @@ export const refDef: FeatureSpec = {
       const sel = state.selection;
       if (!sel.empty) return false;
       const $from = sel.$from;
-      if ($from.parent.type.name !== "paragraph") return false;
-      const text = $from.parent.textContent;
-      const m = REF_COMMIT_RE.exec(text);
-      if (!m) return false;
-      if (dispatch) {
-        const [, label, href, title] = m;
-        const linkDefType = schema.nodes.link_def;
-        const node = linkDefType.create({
-          label,
-          href,
-          title: title || null,
-        });
-        const paraStart = $from.before();
-        const paraEnd = $from.after();
-        const tr = state.tr;
-        tr.replaceWith(paraStart, paraEnd, [
-          node,
-          schema.nodes.paragraph.create(),
-        ]);
-        const newCursor = paraStart + node.nodeSize + 1;
-        tr.setSelection(TextSelection.create(tr.doc, newCursor));
-        dispatch(tr);
+
+      // Path 1: commit a draft paragraph into a structured link_def.
+      if ($from.parent.type.name === "paragraph") {
+        const text = $from.parent.textContent;
+        const m = REF_COMMIT_RE.exec(text);
+        if (!m) return false;
+        if (dispatch) {
+          const [, label, href, title] = m;
+          const node = buildLinkDef(schema, label!, href!, title || "");
+          const paraStart = $from.before();
+          const paraEnd = $from.after();
+          const tr = state.tr;
+          tr.replaceWith(paraStart, paraEnd, [
+            node,
+            schema.nodes.paragraph.create(),
+          ]);
+          // Cursor inside the new link_def's label.
+          const labelInside = paraStart + 2; // link_def open + ref_label open
+          tr.setSelection(TextSelection.create(tr.doc, labelInside));
+          dispatch(tr);
+        }
+        return true;
       }
-      return true;
+
+      // Path 2: cursor is inside an existing link_def. If the url part
+      // already has content, Enter creates a new empty link_def below
+      // and parks the cursor in its label. (If url is empty, fall
+      // through — Enter is meaningless there, baseKeymap will absorb.)
+      for (let d = $from.depth; d >= 0; d--) {
+        const node = $from.node(d);
+        if (node.type.name !== "link_def") continue;
+        const urlNode = node.child(1); // [label, url, title]
+        if (urlNode.content.size === 0) return false;
+        if (dispatch) {
+          const linkDefEnd = $from.after(d);
+          const fresh = buildLinkDef(schema, "", "", "");
+          const tr = state.tr;
+          tr.insert(linkDefEnd, fresh);
+          // Cursor at the start of the new link_def's label.
+          const newLabelInside = linkDefEnd + 2;
+          tr.setSelection(TextSelection.create(tr.doc, newLabelInside));
+          dispatch(tr);
+        }
+        return true;
+      }
+
+      return false;
     },
   }),
 
   blockHandlers: {
     link_def: (state, node) => {
-      const label = node.attrs.label as string;
-      const href = node.attrs.href as string;
-      const title = node.attrs.title as string | null;
+      const label = node.child(0).textContent;
+      const href = node.child(1).textContent;
+      const title = node.child(2).textContent;
       state.write(`[${label}]: ${href}`);
       if (title) state.out += ` "${title}"`;
       state.closeBlock(node);
@@ -169,21 +204,16 @@ export const refDef: FeatureSpec = {
   },
 
   renderCases: {
-    "ref-def": (_children, el) => {
-      const label =
-        el.querySelector(".ref-def-label")?.textContent ?? "";
-      const url = el.querySelector(".ref-def-url")?.textContent ?? "";
-      const title =
-        el.querySelector(".ref-def-title")?.textContent ?? "";
-      const titleSuffix = title ? ` ${title}` : "";
-      return `<ref>${label}</ref> ${url}${titleSuffix}`;
-    },
+    "ref-def": (children) => `<ref-def>${children}</ref-def>`,
+    "ref-label": (children) => `<rl>${children}</rl>`,
+    "ref-url": (children) => `<ru>${children}</ru>`,
+    "ref-title": (children) => `<rt>${children}</rt>`,
   },
 
   cases: [
     {
       id: "type-and-commit",
-      label: "[s]: http://x.com<Enter> drafts then commits to ref-def",
+      label: "[s]: http://x.com<Enter> drafts then commits to structured link_def",
       seed: "",
       events: [
         "[", "s", "]", ":", " ",
@@ -191,43 +221,71 @@ export const refDef: FeatureSpec = {
         "<Enter>",
       ],
       checkpoints: [
-        // auto-pair on `[`
         { at: 1, expect: "[|]" },
         { at: 2, expect: "[s|]" },
         { at: 3, expect: "[s]|" },
-        // `:` typed: paragraph now matches REF_DRAFT_RE; syntax chars
-        // become gray-italic.
         { at: 4, expect: "<gi>[</gi>s<gi>]:</gi>|" },
         { at: 5, expect: "<gi>[</gi>s<gi>]:</gi> |" },
         { at: 17, expect: "<gi>[</gi>s<gi>]:</gi> http://x.com|" },
-        // Enter commits — paragraph swapped for link_def block; cursor
-        // in the fresh trailing paragraph.
-        { at: 18, expect: "<ref>s</ref> http://x.com\n|" },
+        // Commit: structured node; cursor inside the label.
+        {
+          at: 18,
+          expect:
+            "<ref-def><rl>|s</rl><ru>http://x.com</ru><rt></rt></ref-def>",
+        },
+      ],
+    },
+    {
+      id: "empty-placeholders",
+      label: "fresh link_def shows empty url/title slots (placeholders via CSS)",
+      // Build via type-and-commit, then leave url empty? Actually we
+      // can construct via Enter-inside path: a committed first def +
+      // Enter inside it creates a fresh empty one.
+      seed: "",
+      events: [
+        "[", "a", "]", ":", " ", "x", "<Enter>", // commit one
+        "<Enter>",                                  // Enter inside → new empty
+      ],
+      checkpoints: [
+        // After first commit (event 7 — auto-pair adds 1 to indices):
+        // wait — `[`, `a`, `]`, `:`, ` `, `x`, `<Enter>` is 7 events.
+        // After commit cursor is inside the label of the first def.
+        {
+          at: 7,
+          expect:
+            "<ref-def><rl>|a</rl><ru>x</ru><rt></rt></ref-def>",
+        },
+        // Enter while url is filled → new empty link_def below.
+        {
+          at: 8,
+          expect:
+            "<ref-def><rl>a</rl><ru>x</ru><rt></rt></ref-def>\n<ref-def><rl>|</rl><ru></ru><rt></rt></ref-def>",
+        },
       ],
     },
     {
       id: "incomplete-no-commit",
-      label: "[s]:<Enter> (no url) — draft stays, Enter doesn't trigger",
+      label: "[s]:<Enter> (no url) — Enter doesn't trigger commit",
       seed: "",
       events: ["[", "s", "]", ":", "<Enter>"],
       checkpoints: [
         { at: 4, expect: "<gi>[</gi>s<gi>]:</gi>|" },
-        // No commit; Enter splits the paragraph normally. The new
-        // empty paragraph below doesn't match REF_DRAFT_RE so its
-        // chars stay plain.
         { at: 5, expect: "<gi>[</gi>s<gi>]:</gi>\n|" },
       ],
     },
     {
       id: "with-title",
-      label: '[s]: url "title"<Enter> — title preserved',
+      label: '[s]: url "T"<Enter> — title preserved',
       seed: "",
       events: [
         "[", "s", "]", ":", " ", "x", " ", '"', "T", '"', "<Enter>",
       ],
       checkpoints: [
-        // The paragraph contains `[s]: x "T"`; commit fires on Enter.
-        { at: 11, expect: '<ref>s</ref> x "T"\n|' },
+        {
+          at: 11,
+          expect:
+            "<ref-def><rl>|s</rl><ru>x</ru><rt>T</rt></ref-def>",
+        },
       ],
     },
   ],
