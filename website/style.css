@@ -102,7 +102,7 @@ html, body {
 .page-home .free-editor-host,
 .page-home .free-source {
   min-height: 420px;
-  padding: 32px 40px;
+  padding: 20px 40px 40px;
   background: #fff;
   border-radius: 3px;
   box-shadow:
@@ -124,7 +124,7 @@ html, body {
 /* Wider page padding under the home so the paper has visible room
  * around it on small screens — the shadow needs negative space to
  * read as elevation. */
-.page-home { padding-top: 40px; padding-bottom: 80px; }
+.page-home { padding-top: 16px; padding-bottom: 80px; }
 
 .free-dumps { font-size: 12px; color: #999; margin-top: 24px; }
 .free-dumps summary { cursor: pointer; padding: 6px 0; }

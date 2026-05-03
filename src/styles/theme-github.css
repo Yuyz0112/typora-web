@@ -33,6 +33,7 @@
   font-weight: 600;
   line-height: 1.25;
 }
+.ProseMirror > :first-child { margin-top: 0; }
 .ProseMirror h1 {
   font-size: 2em;
   padding-bottom: 0.3em;
