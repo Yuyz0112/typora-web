@@ -1,7 +1,7 @@
 import { describe, expect, test } from "@voidzero-dev/vite-plus-test";
 
-import { parse } from "./parser.ts";
-import { schema } from "./schema.ts";
+import { parse } from "../src/parser.ts";
+import { schema } from "../src/schema.ts";
 
 describe("parser: block nodes", () => {
   test("paragraph with plain text", () => {

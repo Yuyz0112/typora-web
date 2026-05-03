@@ -1,7 +1,7 @@
 import { describe, test } from "@voidzero-dev/vite-plus-test";
 
-import { parse } from "./parser.ts";
-import { serialize } from "./serializer.ts";
+import { parse } from "../src/parser.ts";
+import { serialize } from "../src/serializer.ts";
 
 // Core invariant: parse(serialize(parse(md))) is structurally equal to parse(md).
 // We do not assert md string equality (the serializer normalizes), only that

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "@voidzero-dev/vite-plus-test";
 
-import { parseInline } from "./inline-parse.ts";
+import { parseInline } from "../src/inline-parse.ts";
 
 describe("parseInline", () => {
   test("plain text — no spans", () => {

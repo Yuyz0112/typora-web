@@ -2,8 +2,8 @@ import { describe, expect, test } from "@voidzero-dev/vite-plus-test";
 import { EditorState, TextSelection, type Plugin } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 
-import { leaveLineDraft } from "./block-draft.ts";
-import { schema } from "./schema.ts";
+import { leaveLineDraft } from "../src/block-draft.ts";
+import { schema } from "../src/schema.ts";
 
 // Mock feature: `!! foo` (any number of leading bangs + space + content)
 // promotes to heading(level = bang count) on leave-line. Chosen because it
