@@ -51,38 +51,49 @@ const nodes = {
 // ──────────────────────────────────────────────────────────────────────
 
 function transformListItem(li: PMNode): PMNode {
+  // Two independent transformations on this list item:
+  //   (a) if the first paragraph starts with `[ ] ` / `[x] `, fold the
+  //       prefix into a task_marker
+  //   (b) recurse into tail children — nested ul/ol need (a) too,
+  //       even when *this* li's own first paragraph isn't a task
+  // Bug history: (b) used to only run inside the (a) branch, so a
+  // non-task li wrapping a task sublist left the inner items as raw
+  // `[x]` text. The serializer then escaped the brackets, producing
+  // `\[x\]` on round-trip.
   const firstChild = li.firstChild;
-  if (!firstChild || firstChild.type.name !== "paragraph") return li;
-  const firstText = firstChild.firstChild;
-  if (!firstText || !firstText.isText) return li;
-  const m = TASK_RE.exec(firstText.text!);
-  if (!m) return li;
-
-  const checked = m[1] === "[x]";
-  const sch = li.type.schema;
-  const marker = sch.nodes.task_marker.create({ checked });
-  const remainingText = firstText.text!.slice(m[0].length);
-
-  const newInlineChildren: PMNode[] = [marker];
-  if (remainingText) {
-    newInlineChildren.push(sch.text(remainingText, firstText.marks));
+  let foldedFirst: PMNode | null = null;
+  if (firstChild && firstChild.type.name === "paragraph") {
+    const firstText = firstChild.firstChild;
+    if (firstText && firstText.isText) {
+      const m = TASK_RE.exec(firstText.text!);
+      if (m) {
+        const checked = m[1] === "[x]";
+        const sch = li.type.schema;
+        const marker = sch.nodes.task_marker.create({ checked });
+        const remainingText = firstText.text!.slice(m[0].length);
+        const newInline: PMNode[] = [marker];
+        if (remainingText) newInline.push(sch.text(remainingText, firstText.marks));
+        firstChild.forEach((child, _, idx) => {
+          if (idx > 0) newInline.push(child);
+        });
+        foldedFirst = firstChild.type.createAndFill(firstChild.attrs, newInline)!;
+      }
+    }
   }
-  // Append remaining inline children of the paragraph after the first text.
-  firstChild.forEach((child, _, idx) => {
-    if (idx > 0) newInlineChildren.push(child);
-  });
-  const newPara = firstChild.type.createAndFill(
-    firstChild.attrs,
-    newInlineChildren,
-  )!;
 
-  const newLiChildren: PMNode[] = [newPara];
-  // Tail children may include nested ul/ol — recurse so inner list_items
-  // also get the prefix-fold treatment.
+  const newChildren: PMNode[] = [];
+  let changed = foldedFirst !== null;
   li.forEach((child, _, idx) => {
-    if (idx > 0) newLiChildren.push(transformBlock(child));
+    let next: PMNode;
+    if (idx === 0 && foldedFirst) next = foldedFirst;
+    else {
+      next = transformBlock(child);
+      if (next !== child) changed = true;
+    }
+    newChildren.push(next);
   });
-  return li.type.createAndFill(li.attrs, newLiChildren)!;
+  if (!changed) return li;
+  return li.type.createAndFill(li.attrs, newChildren)!;
 }
 
 function transformBlock(node: PMNode): PMNode {

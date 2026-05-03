@@ -5,7 +5,7 @@
 // `host` and returns a controller you can use to destroy / clear it
 // when the route unmounts.
 
-import { EditorState } from "prosemirror-state";
+import { EditorState, TextSelection } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 
 import { defaultPlugins } from "../../src/editor.ts";
@@ -31,8 +31,8 @@ export function mountFreeEditor(
       <button data-act="source-toggle">Source <kbd>⌘/</kbd></button>
       <button data-act="clear">Clear</button>
     </div>
-    <div class="pane pane-editor free-editor-host"></div>
-    <textarea class="pane pane-editor source-textarea free-source" hidden></textarea>
+    <div class="free-editor-host"></div>
+    <textarea class="free-source" hidden></textarea>
     ${
       showDumps
         ? `<details class="free-dumps">
@@ -59,11 +59,19 @@ export function mountFreeEditor(
 
   function build(initialMd?: string): EditorView {
     const doc = initialMd ? parse(initialMd) : schema.nodes.doc.createAndFill()!;
-    const state = EditorState.create({
+    const base = EditorState.create({
       schema,
       doc,
       plugins: defaultPlugins({ cursorWidget: false }),
     });
+    // Fire one no-op transaction so normalize's appendTransaction runs
+    // and method-B marks (autolink, em, strong, code, etc.) get applied
+    // before first render. EditorState.create alone runs `state.init`
+    // but not `appendTransaction`, leaving parsed-from-seed docs without
+    // their marks until the user types.
+    const state = base.apply(
+      base.tr.setSelection(TextSelection.atStart(doc)),
+    );
     const v = new EditorView($editor, {
       state,
       dispatchTransaction(tr) {

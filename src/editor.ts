@@ -1,5 +1,5 @@
 import type { Node as PMNode } from "prosemirror-model";
-import { EditorState, type Plugin } from "prosemirror-state";
+import { EditorState, Plugin } from "prosemirror-state";
 import { keymap } from "prosemirror-keymap";
 import { baseKeymap } from "prosemirror-commands";
 import { history, undo, redo } from "prosemirror-history";
@@ -10,6 +10,30 @@ import { collectKeymaps, collectPlugins } from "./features/index.ts";
 import { markdownInputRules, spaceBreaksStoredMarks } from "./input-rules.ts";
 import { normalizeInlinePlugin } from "./normalize.ts";
 import { schema } from "./schema.ts";
+
+// Open `<a>` links on Cmd/Ctrl+click. Inside contenteditable, a plain
+// click moves the caret instead of navigating — opting in to the
+// modifier preserves selection-by-click while letting users follow
+// links. Auto-collected by collectPlugins indirectly via this module
+// so the lib's defaultPlugins() ships it.
+function openLinkOnModClickPlugin(): Plugin {
+  return new Plugin({
+    props: {
+      handleClick(_view, _pos, event) {
+        const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
+        const mod = isMac ? event.metaKey : event.ctrlKey;
+        if (!mod) return false;
+        const a = (event.target as Element | null)?.closest("a");
+        if (!a) return false;
+        const href = a.getAttribute("href");
+        if (!href) return false;
+        event.preventDefault();
+        window.open(href, "_blank", "noopener,noreferrer");
+        return true;
+      },
+    },
+  });
+}
 
 export function defaultPlugins(options: { cursorWidget?: boolean } = {}): Plugin[] {
   // cursorRenderPlugin paints a visible caret even when the view is not
@@ -29,6 +53,7 @@ export function defaultPlugins(options: { cursorWidget?: boolean } = {}): Plugin
     // extra decorations merge into PM's decoration pipeline naturally).
     ...collectPlugins(schema),
     syntaxHintsPlugin(),
+    openLinkOnModClickPlugin(),
   ];
   if (cursorWidget) plugins.push(cursorRenderPlugin());
   // Feature keymap wins over baseKeymap — features that override Enter /

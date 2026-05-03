@@ -83,12 +83,15 @@ export function createCaseCard(
     // List staircase cases (seed `- a\n  - b`) need this; otherwise the
     // events run from the wrong starting cursor and produce visibly
     // wrong DOM.
-    const state = EditorState.create({
+    const base = EditorState.create({
       schema,
       doc,
       selection: TextSelection.atEnd(doc),
       plugins: defaultPlugins(),
     });
+    // Fire one no-op transaction to trigger normalize before first
+    // render so method-B marks are applied. (See free-editor.ts.)
+    const state = base.apply(base.tr.setSelection(base.selection));
     if (view) view.destroy();
     view = new EditorView($editor, { state });
     cursorIndex = 0;

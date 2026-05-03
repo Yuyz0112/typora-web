@@ -1,0 +1,361 @@
+/*
+ * Editor chrome — required for the editor's interactive UI to work.
+ *
+ * Everything in this file is "ours": cursor decoration, syntax-hint
+ * dimming, NodeView innards, structured-block chrome (ref-def, yaml,
+ * toc, code-fence lang input, table toolbar, emoji popup, etc.).
+ *
+ * Not in this file:
+ *   - Markdown content typography (h1-h6 sizes, link colors,
+ *     blockquote border, etc.) — that's a swappable theme; see
+ *     ./theme-github.css.
+ *   - Website-only chrome (nav, page, specs catalog, etc.) — see
+ *     website/style.css.
+ *
+ * Lib consumers should import this file once. Themes are imported on
+ * top of it.
+ */
+
+/* ─── PM root reset ──────────────────────────────────────────────── */
+.ProseMirror {
+  outline: none;
+  min-height: 168px;
+}
+.ProseMirror[contenteditable="true"]:focus { outline: none; }
+
+/* ─── method-B syntax hints ──────────────────────────────────────── */
+.ProseMirror .syntax-hint {
+  color: #b0b0b0;
+  font-weight: normal;
+  font-style: normal;
+  user-select: none;
+}
+.ProseMirror .syntax-hint-italic {
+  color: #b0b0b0;
+  font-style: italic;
+  font-weight: normal;
+  user-select: none;
+}
+/* Delim char is present in the doc text but visually absent when the
+ * cursor is outside the mark's surrounding span. PM pos still tracks
+ * it; arrow keys may briefly land on a hidden delim and the char
+ * becomes visible as soon as the cursor enters the span. */
+.ProseMirror .syntax-hidden { font-size: 0; }
+
+/* HTML comment — wraps the entire `<!-- ... -->` source. The chars
+ * stay visible (no decoration hides them); the wrapper just dims so
+ * the user can see at a glance that this is a comment. */
+.ProseMirror mark-comment {
+  color: #999;
+  font-style: italic;
+}
+
+/* Heading-draft contour: while the cursor is inside a paragraph that
+ * starts with `# ` (etc), the whole paragraph reads as bold so the
+ * user sees the heading-to-be. The `# ` itself has .syntax-hint and
+ * stays at the paragraph's normal font-weight. */
+.ProseMirror .heading-draft-1,
+.ProseMirror .heading-draft-2,
+.ProseMirror .heading-draft-3,
+.ProseMirror .heading-draft-4,
+.ProseMirror .heading-draft-5,
+.ProseMirror .heading-draft-6 { font-weight: bold; }
+
+/* ─── play caret + selection marker (test-pretty / fakeView) ─────── */
+.ProseMirror .play-caret {
+  display: inline-block;
+  width: 2px;
+  height: 1.15em;
+  margin: 0 -1px;
+  background: #1f1f1f;
+  vertical-align: text-bottom;
+  animation: play-caret-blink 1s step-end infinite;
+  user-select: none;
+  pointer-events: none;
+}
+@keyframes play-caret-blink { 50% { opacity: 0; } }
+.ProseMirror-focused .play-caret { display: none; }
+.ProseMirror .selection-marker {
+  color: #1f1f1f;
+  font-weight: bold;
+  user-select: none;
+}
+.ProseMirror-focused .selection-marker { display: none; }
+
+/* ─── reference link def — structured editable block ─────────────── */
+.ProseMirror ref-def {
+  display: block;
+  margin: 4px 0;
+  font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #444;
+}
+.ProseMirror ref-label,
+.ProseMirror ref-url,
+.ProseMirror ref-title {
+  display: inline-block;
+  min-width: 1em;
+}
+.ProseMirror ref-label::before { content: "[ "; color: #b0b0b0; user-select: none; }
+.ProseMirror ref-label::after  { content: " ]: "; color: #b0b0b0; user-select: none; }
+.ProseMirror ref-url { color: #0969da; }
+.ProseMirror ref-url[data-placeholder]::before {
+  content: attr(data-placeholder);
+  color: #b0b0b0;
+  font-style: italic;
+  text-decoration: underline;
+  user-select: none;
+}
+.ProseMirror ref-title { color: #555; padding-left: 0.6em; }
+.ProseMirror ref-title::before { content: '" '; color: #b0b0b0; user-select: none; }
+.ProseMirror ref-title::after  { content: ' "'; color: #b0b0b0; user-select: none; }
+.ProseMirror ref-title[data-placeholder]::before {
+  content: '" ' attr(data-placeholder) ' "';
+  color: #b0b0b0;
+  font-style: italic;
+  user-select: none;
+}
+.ProseMirror ref-title[data-placeholder]::after { content: ""; }
+.ProseMirror ref-label > .ProseMirror-trailingBreak,
+.ProseMirror ref-url   > .ProseMirror-trailingBreak,
+.ProseMirror ref-title > .ProseMirror-trailingBreak { display: none; }
+
+/* ─── YAML front matter ──────────────────────────────────────────── */
+.ProseMirror yaml-block {
+  display: block;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: #fbf6e8;
+  color: #444;
+  padding: 10px 14px;
+  margin: 8px 0 16px;
+  border-left: 3px solid #b58900;
+  border-radius: 4px;
+}
+
+/* ─── TOC NodeView ───────────────────────────────────────────────── */
+.ProseMirror .toc {
+  border: 1px solid #e3e3e3;
+  border-radius: 6px;
+  padding: 8px 14px;
+  margin: 8px 0;
+  background: #fafafa;
+  font-size: 0.95em;
+}
+.ProseMirror .toc-empty { color: #999; font-style: italic; }
+.ProseMirror .toc-list { list-style: none; padding: 0; margin: 0; }
+.ProseMirror .toc-item { cursor: pointer; padding: 2px 0; color: #555; }
+.ProseMirror .toc-item:hover { color: #1f1f1f; text-decoration: underline; }
+.ProseMirror .toc-h1 { padding-left: 0; font-weight: 600; }
+.ProseMirror .toc-h2 { padding-left: 1.2em; }
+.ProseMirror .toc-h3 { padding-left: 2.4em; }
+.ProseMirror .toc-h4 { padding-left: 3.6em; }
+.ProseMirror .toc-h5 { padding-left: 4.8em; }
+.ProseMirror .toc-h6 { padding-left: 6em; }
+
+/* ─── Emoji autocomplete (fixed-position popup) ──────────────────── */
+.ProseMirror .emoji-completion {
+  position: fixed;
+  z-index: 10;
+  min-width: 200px;
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 4px 0;
+  border: 1px solid #d0d0d0;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  font: 13px/1.3 -apple-system, system-ui, sans-serif;
+  user-select: none;
+}
+.ProseMirror .emoji-completion-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+.ProseMirror .emoji-completion-row:hover { background: #f5f5f5; }
+.ProseMirror .emoji-completion-row.selected { background: #f0eaff; }
+.ProseMirror .emoji-completion-glyph {
+  font-size: 16px;
+  line-height: 1;
+  width: 20px;
+  text-align: center;
+}
+.ProseMirror .emoji-completion-name {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #555;
+}
+
+/* ─── Image edit-mode UI ─────────────────────────────────────────── */
+.ProseMirror .image-icon { display: inline-block; user-select: none; }
+.ProseMirror .image-icon::before { content: "🖼️"; font-size: 0.9em; margin-right: 2px; }
+.ProseMirror .image-icon.broken::before {
+  content: "🖼️"; filter: grayscale(1) brightness(0.7); opacity: 0.6;
+}
+.ProseMirror .image-icon.broken::after {
+  content: "⚠"; color: #c43; font-size: 0.8em; margin-right: 2px;
+}
+.ProseMirror .file-input {
+  display: inline-block;
+  cursor: pointer;
+  user-select: none;
+  font-size: 0.9em;
+  margin: 0 2px;
+  opacity: 0.6;
+}
+.ProseMirror .file-input:hover { opacity: 1; }
+.ProseMirror img.image-render {
+  display: block;
+  max-width: 100%;
+  margin: 4px 0;
+}
+
+/* ─── Task-list checkbox NodeView ────────────────────────────────── */
+/* Outer wrapper — extends the inline-block to the right with
+ * transparent padding so the native caret (which positions itself at
+ * the OUTER edge of an inline-block, not past the margin) ends up
+ * visually separated from the visible glyph. */
+.ProseMirror .checkbox-frame {
+  display: inline-block;
+  padding-right: 8px;
+  vertical-align: -2px;
+  user-select: none;
+}
+.ProseMirror .checkbox {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  vertical-align: -2px;
+  border: 1.5px solid #888;
+  border-radius: 3px;
+  background: #fff;
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+  box-sizing: border-box;
+}
+.ProseMirror .checkbox[data-checked="1"] {
+  background: #1f1f1f;
+  border-color: #1f1f1f;
+}
+.ProseMirror .checkbox[data-checked="1"]::after {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 0;
+  width: 4px;
+  height: 8px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+/* ─── Fenced code NodeView chrome ────────────────────────────────── */
+.ProseMirror pre { position: relative; }
+.ProseMirror pre .cb-chrome {
+  display: none;
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
+  user-select: none;
+}
+.ProseMirror pre.cb-active .cb-chrome { display: block; }
+.ProseMirror pre .cb-lang-input {
+  width: 80px;
+  padding: 2px 6px;
+  font: 12px ui-monospace, SFMono-Regular, Menlo, monospace;
+  border: 1px solid #d0d0d0;
+  border-radius: 4px;
+  background: #fff;
+  color: #333;
+  outline: none;
+}
+.ProseMirror pre .cb-lang-input:focus { border-color: #1f1f1f; }
+.ProseMirror pre.cb-lang-focus .play-caret { display: none; }
+
+/* ─── Table toolbar (body-mounted floating UI) ───────────────────── */
+.table-toolbar {
+  position: fixed;
+  display: none;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  background: #fff;
+  border: 1px solid #e3e3e3;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  z-index: 10;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+.table-tb-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #555;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.table-tb-btn:hover { background: #f0f0f0; }
+.table-tb-btn.active { background: #f0eaff; color: #1f1f1f; }
+.table-tb-trash:hover { background: #fde8e8; color: #c0392b; }
+.table-tb-sep {
+  width: 1px;
+  align-self: stretch;
+  background: #e3e3e3;
+  margin: 2px 4px;
+}
+.table-tb-spacer { flex: 1; min-width: 12px; }
+
+.table-resize-popup {
+  position: fixed;
+  display: none;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  padding: 14px;
+  z-index: 11;
+}
+.table-resize-grid {
+  display: grid;
+  grid-template-columns: repeat(10, 18px);
+  gap: 3px;
+  margin-bottom: 12px;
+}
+.table-resize-cell {
+  width: 18px;
+  height: 18px;
+  border: 1px solid #ccc;
+  border-radius: 2px;
+  background: #fff;
+  cursor: pointer;
+}
+.table-resize-cell.hover {
+  background: #909090;
+  border-color: #707070;
+}
+.table-resize-inputs {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-top: 1px solid #eee;
+  padding-top: 10px;
+  font: 13px/1 system-ui, -apple-system, sans-serif;
+  color: #555;
+}
+.table-resize-inputs input {
+  width: 36px;
+  padding: 4px 6px;
+  border: 1px solid #d0d0d0;
+  border-radius: 4px;
+  text-align: center;
+  font: inherit;
+}

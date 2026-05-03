@@ -2,6 +2,8 @@
 // router. Everything else lives in components/ and routes/.
 
 import "prosemirror-view/style/prosemirror.css";
+import "../src/styles/widgets.css";
+import "../src/styles/theme-github.css";
 import "./style.css";
 
 import { startRouter } from "./router.ts";
