@@ -2,7 +2,7 @@
 
 [toc]
 
-**typora-web** is a faithful port of [Typora][typora]'s WYSIWYG markdown editing into the browser, built on **ProseMirror**. What you're reading now *is* the editor — click anywhere and start typing.
+**typora-web** is a faithful port of [Typora][typora]'s WYSIWYG markdown editing into the browser, built on **ProseMirror**. What you're reading now *is* the editor — click anywhere and start typing. Press `⌘/` (or `Ctrl+/`) at any time to flip between rendered and source view.
 
 <!-- this whole page is the live demo; edit freely, the source round-trips -->
 

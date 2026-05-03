@@ -27,10 +27,6 @@ export function mountFreeEditor(
   const wrap = document.createElement("div");
   wrap.className = "free-editor-wrap";
   wrap.innerHTML = `
-    <div class="controls free-controls">
-      <button data-act="source-toggle">Source <kbd>⌘/</kbd></button>
-      <button data-act="clear">Clear</button>
-    </div>
     <div class="free-editor-host"></div>
     <textarea class="free-source" hidden></textarea>
     ${
@@ -49,10 +45,6 @@ export function mountFreeEditor(
   const $source = wrap.querySelector(".free-source") as HTMLTextAreaElement;
   const $pretty = wrap.querySelector(".free-pretty") as HTMLElement | null;
   const $md = wrap.querySelector(".free-md") as HTMLElement | null;
-  const $sourceToggle = wrap.querySelector(
-    '[data-act="source-toggle"]',
-  ) as HTMLButtonElement;
-  const $clear = wrap.querySelector('[data-act="clear"]') as HTMLButtonElement;
 
   let view: EditorView;
   let inSourceMode = false;
@@ -100,7 +92,6 @@ export function mountFreeEditor(
     $source.hidden = false;
     $source.focus();
     inSourceMode = true;
-    $sourceToggle.classList.add("active");
   }
 
   function exitSource(): void {
@@ -109,16 +100,12 @@ export function mountFreeEditor(
     $editor.hidden = false;
     view.focus();
     inSourceMode = false;
-    $sourceToggle.classList.remove("active");
   }
 
   function toggleSource(): void {
     if (inSourceMode) exitSource();
     else enterSource();
   }
-
-  $sourceToggle.addEventListener("click", toggleSource);
-  $clear.addEventListener("click", () => rebuild(""));
 
   // ⌘ / Ctrl + slash, scoped to this editor's DOM.
   function onKey(e: KeyboardEvent): void {

@@ -83,31 +83,6 @@ html, body {
   flex-direction: column;
   gap: 12px;
 }
-.free-controls {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  font-size: 12px;
-  color: #999;
-}
-.free-controls button {
-  padding: 4px 10px;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  font: inherit;
-  color: #888;
-  border-radius: 4px;
-  transition: color 0.15s, background 0.15s;
-}
-.free-controls button:hover { color: #1f1f1f; background: rgba(0, 0, 0, 0.03); }
-.free-controls button.active { color: #1f1f1f; background: rgba(0, 0, 0, 0.05); }
-.free-controls kbd {
-  font: 10.5px ui-monospace, SFMono-Regular, Menlo, monospace;
-  color: #aaa;
-  margin-left: 4px;
-}
-
 /* Paper. The editor on the home page is a physical sheet floating
  * over the off-white page — soft layered shadow, white surface,
  * generous typographic margins. Source textarea inherits the same
@@ -119,8 +94,8 @@ html, body {
  * Typora's own editor surface. */
 .page-home .free-editor-host,
 .page-home .free-source {
-  min-height: 480px;
-  padding: 56px 64px;
+  min-height: 420px;
+  padding: 32px 40px;
   background: #fff;
   border-radius: 3px;
   box-shadow:
