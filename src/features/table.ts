@@ -1,4 +1,5 @@
-import type { Node as PMNode } from "prosemirror-model";
+import type { Node as PMNode, Schema } from "prosemirror-model";
+import { TextSelection } from "prosemirror-state";
 
 import type { FeatureSpec } from "./_types.ts";
 
@@ -103,6 +104,60 @@ export const table: FeatureSpec = {
   },
 
   mdItPlugins: [(md) => md.enable("table")],
+
+  keymap: (schema: Schema) => ({
+    // Live trigger: a paragraph whose text is exactly `|c1|c2|...|`
+    // (≥ 2 cells, leading + trailing pipes) commits to a table on Enter.
+    // Cells split on `|`; first and last segments (empty by construction)
+    // are dropped; middle segments — including empty ones — become cells
+    // verbatim (trimmed).
+    Enter: (state, dispatch) => {
+      const sel = state.selection;
+      if (!sel.empty) return false;
+      const $from = sel.$from;
+      if ($from.parent.type.name !== "paragraph") return false;
+      const text = $from.parent.textContent;
+      if (!/^\|.+\|$/.test(text)) return false;
+      const parts = text.split("|");
+      // Leading + trailing `|` always produce empty first/last entries.
+      const cells = parts.slice(1, -1).map((c) => c.trim());
+      if (cells.length < 2) return false;
+
+      if (dispatch) {
+        const headerRow = schema.nodes.table_row.create(
+          null,
+          cells.map((c) =>
+            schema.nodes.table_cell.create(
+              { header: true, align: null },
+              c ? [schema.text(c)] : [],
+            ),
+          ),
+        );
+        const bodyRow = schema.nodes.table_row.create(
+          null,
+          cells.map(() =>
+            schema.nodes.table_cell.create(
+              { header: false, align: null },
+              [],
+            ),
+          ),
+        );
+        const tableNode = schema.nodes.table.create(null, [headerRow, bodyRow]);
+
+        const paraStart = $from.before();
+        const paraEnd = $from.after();
+        const tr = state.tr;
+        tr.replaceWith(paraStart, paraEnd, tableNode);
+        // Cursor inside first body cell. Position: paraStart (= table
+        // start) + 1 (table open) + headerRow.nodeSize + 1 (body row open)
+        // + 1 (first cell open).
+        const firstBodyCell = paraStart + 1 + headerRow.nodeSize + 2;
+        tr.setSelection(TextSelection.create(tr.doc, firstBodyCell));
+        dispatch(tr);
+      }
+      return true;
+    },
+  }),
 
   parserTokens: {
     table_open: (state, _tok, schema) => {
@@ -222,6 +277,43 @@ export const table: FeatureSpec = {
           expect:
             "<table><tr><th:left>L</th><th:center>C</th><th:right>R</th></tr><tr><td:left>a</td><td:center>b</td><td:right>c|</td></tr></table>",
         },
+      ],
+    },
+    {
+      id: "commit-2-col",
+      label: "|a|b|<Enter> commits to 2-col table with empty body row",
+      seed: "",
+      events: ["|", "a", "|", "b", "|", "<Enter>"],
+      checkpoints: [
+        { at: 5, expect: "|a|b||" },
+        {
+          at: 6,
+          expect:
+            "<table><tr><th>a</th><th>b</th></tr><tr><td>|</td><td></td></tr></table>",
+        },
+      ],
+    },
+    {
+      id: "commit-3-col-empty-middle",
+      label: "|a||b|<Enter> commits to 3 cols with empty middle header",
+      seed: "",
+      events: ["|", "a", "|", "|", "b", "|", "<Enter>"],
+      checkpoints: [
+        {
+          at: 7,
+          expect:
+            "<table><tr><th>a</th><th></th><th>b</th></tr><tr><td>|</td><td></td><td></td></tr></table>",
+        },
+      ],
+    },
+    {
+      id: "single-col-no-trigger",
+      label: "|a|<Enter> doesn't trigger (need ≥ 2 cols)",
+      seed: "",
+      events: ["|", "a", "|", "<Enter>"],
+      checkpoints: [
+        // Plain Enter splits the paragraph; no table.
+        { at: 4, expect: "|a|\n|" },
       ],
     },
     {
