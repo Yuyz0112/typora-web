@@ -136,9 +136,10 @@ function resizeTable(
       const isHeader = r === 0;
       // Reuse alignment from the corresponding column in the old
       // header row (if any) so resizing preserves user intent.
+      const headerRowOld = oldRows[0];
       const align =
-        oldRows[0] && oldRows[0].child(c)
-          ? (oldRows[0].child(c).attrs.align as string | null)
+        headerRowOld && c < headerRowOld.childCount
+          ? (headerRowOld.child(c).attrs.align as string | null)
           : null;
       const content = oldCell ? oldCell.content : null;
       cells.push(
