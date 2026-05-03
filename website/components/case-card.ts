@@ -141,15 +141,11 @@ export function createCaseCard(
   let cursorIndex = 0;
   let playTimer: number | null = null;
 
-  function nearestCheckpoint(): Checkpoint | undefined {
-    if (!checkpoints.length) return undefined;
-    // largest cp.at <= cursorIndex; fall back to first cp if we haven't reached any yet.
-    let best: Checkpoint | undefined;
-    for (const cp of checkpoints) {
-      if (cp.at <= cursorIndex) best = cp;
-      else break;
-    }
-    return best ?? checkpoints[0];
+  function activeCheckpoint(): Checkpoint | undefined {
+    // Only the checkpoint that lands EXACTLY on the current cursor is
+    // a fair comparison — between checkpoints, we have no expected
+    // value to compare against, so the indicator stays neutral.
+    return checkpoints.find((c) => c.at === cursorIndex);
   }
 
   function buildIssueHref(observedPretty: string): string {
@@ -223,9 +219,11 @@ export function createCaseCard(
     $play.disabled = done;
     el.classList.toggle("done", done);
 
-    // Live spec match. Empty when there's no checkpoint reachable yet.
-    const cp = nearestCheckpoint();
-    if (cp && cursorIndex >= cp.at) {
+    // Live spec match: shown only on the steps that have a checkpoint
+    // pinned to them. Between checkpoints we don't know what the
+    // expected pretty would be, so the indicator stays empty.
+    const cp = activeCheckpoint();
+    if (cp) {
       const ok = observed === cp.expect;
       $match.textContent = ok ? "✓" : "✗";
       $match.title = ok
