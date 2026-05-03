@@ -23,10 +23,27 @@ view (DOM, built by PM EditorView)
 
 ## File map
 
-### Core
+### Top-level layout
+
+The repo splits four ways. The dependency rule is one-way: `src/`
+never imports from `tests/` / `specs/` / `website/`. That's what
+keeps lib mode's bundle free of test fixtures and harness UI.
+
+```
+src/         editor lib (lib mode entry: src/lib.ts)
+specs/       test/spec data — cases, renderCases, event DSL, pretty
+tests/       *.test.ts + runFeatureCases driver
+website/     harness UI — main.ts, index.html, style.css
+```
+
+`tsconfig.json` includes all four; vite's website build uses
+`root: "website"`; lib build is configured via `vite.lib.config.ts`.
+
+### Core (`src/`)
 
 | File | Responsibility |
 |---|---|
+| `lib.ts` | Public API. Re-exports `defaultPlugins`, `createState`, `schema`, `parse`, `serialize`. Lib bundle's import root — must not transitively reach specs/tests/website. |
 | `schema.ts` | PM schema. Merges `coreNodes` (doc/paragraph/text/hard_break/heading/blockquote/code_block/lists) with `collectNodes()` / `collectMarks()` from features. No core marks — every mark belongs to a feature. |
 | `parser.ts` | md → PM doc. `ParserState` is exported for features (with `topMark(type)` so close-handlers can read attrs before closing). Core block / text / softbreak / hardbreak tokens handled inline; all other tokens dispatched through `collectParserTokens()`. Registered `mdItPlugins` run on the singleton markdown-it instance. |
 | `serializer.ts` | PM doc → md. Mark delimiters come from `collectMarkDelims()`; each inline feature's `extRanges(parent)` marks the chars that must be emitted raw (no backslash escape) so method-B delim chars survive round-trip. |
@@ -36,21 +53,42 @@ view (DOM, built by PM EditorView)
 | `cursor-render.ts` | `cursorRenderPlugin()` — paints the selection as a widget. Empty selection → `<span class="play-caret">`, non-empty → `selection-marker` on both ends. Since gray delims are now inline decorations on real chars, no dynamic `side` juggling. |
 | `input-rules.ts` | Thin shell: `inputRules({ rules: collectInputRules(schema) })` + `spaceBreaksStoredMarks`. Under method B, no inline feature registers input rules — normalize handles everything. Input rules remain available for block-shaped syntaxes that aren't delim-pair based. |
 | `editor.ts` | `defaultPlugins()`: history / keymap / input-rules / space-breaks / **normalizeInlinePlugin** / syntaxHints / cursorRender / baseKeymap. Same stack in live editor and test pretty. |
-| `events.ts` | `feedEvent(view, e)` — translates the event DSL into a transaction. View surface is minimal (`{state, dispatch, endOfTextblock, hasFocus}`). |
-| `test-utils.ts` | `setup(md)` / `apply(state, events)` / `pretty(state)` + `runFeatureCases(feature)` — the feature test driver. |
-| `test-pretty.ts` | Spins up a real `EditorView` in happy-dom; walks `view.dom` to HTML-ish text. Feature-contributed `renderCases` map wins over the core switch. Skips `syntax-hidden` spans (delim char visually absent). |
-| `main.ts` | Visualisation harness. `SCRIPTS = featureScripts (from collectCases()) + coreScripts (hand-written plain/cursor/history)` — one data source for both assertions and the harness. |
 
 ### Features (`src/features/`)
 
 | File | Owns |
 |---|---|
-| `_types.ts` | `FeatureSpec`, `InlineFeatureSpec`, `Case`, `Checkpoint`, `TokenHandler`, `RenderCase`. |
+| `_types.ts` | `FeatureSpec`, `InlineFeatureSpec`, `TokenHandler`. (Test-data types — `Case`, `Checkpoint`, `RenderCase`, `FeatureSpecs` — live in `specs/_types.ts`.) |
 | `index.ts` | `ALL_FEATURES` registry plus `collectX()` helpers that core modules read. Adding a feature = one import + one array entry. |
 | `emphasis.ts` | em + strong (priority 2). Merged because they share one `*`/`_` runs scanner (strong wins when both ends have ≥ 2 chars). |
 | `code.ts` | inline code `` `x` `` (priority 0, wins over emphasis). |
 | `strike.ts` | strike `~~x~~` (priority 1). Enables markdown-it's strikethrough rule via `mdItPlugins`. |
 | `link.ts` | link `[text](href "title")` (priority 3). Uses a regex scanner (asymmetric close delim carrying `href`/`title` attrs) rather than delim-runs. Parser close-handler reads `href` via `ParserState.topMark` to emit `](url)` as raw text, so the doc's text has the full source. |
+
+### Specs (`specs/`)
+
+| File | Owns |
+|---|---|
+| `_types.ts` | `Case`, `Checkpoint`, `RenderCase`, `FeatureSpecs`. The dual to `FeatureSpec` for test/spec data. |
+| `events.ts` | `feedEvent(view, e)` — translates the event DSL into a transaction. View surface is minimal (`{state, dispatch, endOfTextblock, hasFocus}`). |
+| `pretty.ts` | Spins up a real `EditorView` in happy-dom; walks `view.dom` to HTML-ish text. Reads `collectRenderCases()` from `specs/features/index.ts`. Skips `syntax-hidden` spans. |
+| `features/<name>.specs.ts` | Per-feature `cases` + `renderCases`. Sibling to `src/features/<name>.ts`. |
+| `features/index.ts` | `ALL_SPECS` registry plus `collectCases` / `collectRenderCases`. Imported by tests and website only. |
+
+### Tests (`tests/`)
+
+| File | Owns |
+|---|---|
+| `utils.ts` | `setup(md)` / `apply(state, events)` / `pretty(state)` + `runFeatureCases(specs)`. The feature test driver. |
+| `<*>.test.ts`, `features/<name>.test.ts` | Vitest specs. Each feature test is `runFeatureCases(<name>Specs)`. |
+
+### Website (`website/`)
+
+| File | Owns |
+|---|---|
+| `main.ts` | Visualisation harness. `SCRIPTS = featureScripts (from collectCases()) + coreScripts (hand-written plain/cursor/history)` — one data source for both assertions and the harness. |
+| `index.html` | Vite entry. `root: "website"` in `vite.config.ts`. |
+| `style.css` | All editor + harness CSS. (TODO: split editor styles back into a lib-shipped CSS when lib gets a polished CSS story.) |
 
 ## Architectural invariants
 
@@ -66,7 +104,7 @@ view (DOM, built by PM EditorView)
 
 4. **Method-B is the only path for inline marks.** Text in the doc is the source (contains delim chars); `normalize.ts` is the single authority that turns text into mark structure. Do NOT manually add/remove inline marks in feature code or other plugins — normalize will overwrite on the next transaction. If a new inline syntax needs different semantics, extend `parseInline` and normalize. Attr-bearing marks (link) carry their attrs through `InlineSpan.attrs`; normalize passes them to `markType.create(attrs)`.
 
-5. **Features are self-contained.** Every cross-cutting seam (schema / parser token / serializer delim / decoration class / input rule / inline scanner / test-pretty renderCase / cases) is declared inside the feature's file. Core modules only orchestrate via `collectX()`. This is what lets multiple agents develop features in parallel with minimal conflict surface.
+5. **Features are self-contained, but split across `src/` and `specs/`.** Each feature's runtime seams (schema / parser token / serializer delim / input rule / inline scanner / keymap / plugins) live in `src/features/<name>.ts`. Each feature's test/demo data (`cases`, `renderCases`) lives in `specs/features/<name>.specs.ts`. Both are aggregated by their respective `index.ts`. Adding a feature = one entry in each registry. This is what lets multiple agents develop features in parallel with minimal conflict surface AND keeps lib mode free of test fixtures.
 
 ## How to add a Markdown syntax
 
