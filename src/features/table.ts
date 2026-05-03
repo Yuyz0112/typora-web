@@ -1,5 +1,6 @@
 import type { Node as PMNode, Schema } from "prosemirror-model";
-import { TextSelection } from "prosemirror-state";
+import { Plugin, TextSelection } from "prosemirror-state";
+import type { EditorView } from "prosemirror-view";
 
 import type { FeatureSpec } from "./_types.ts";
 
@@ -40,6 +41,381 @@ function alignDelim(align: string | null, width: number): string {
 // width measurement, then actual emission). We render via the same
 // inline serializer the rest of the doc uses, but into a sandbox so
 // pmPos/markers from the outer state don't leak.
+// ---------------- toolbar plugin ----------------
+//
+// Floating toolbar shown when the cursor is inside a table. Carries:
+//   * resize trigger (田字格 icon) → opens a popup with a hover-grid
+//     and numeric R × C inputs to resize the table.
+//   * 3 align buttons → set `align` on every cell in the cursor's
+//     current column.
+//   * trash → delete the whole table (replaced by an empty paragraph).
+//
+// The toolbar lives at `document.body` (position: fixed, viewport
+// coords). Position is recomputed every PM transaction from the table
+// element's bounding rect.
+
+type TableInfo = {
+  pos: number; // pos *of* the table node (so view.nodeDOM works).
+  node: PMNode;
+  rowIdx: number;
+  cellIdx: number;
+};
+
+function findTableAtSelection(state: import("prosemirror-state").EditorState): TableInfo | null {
+  const $from = state.selection.$from;
+  let cellDepth = -1;
+  for (let d = $from.depth; d >= 0; d--) {
+    if ($from.node(d).type.name === "table_cell") {
+      cellDepth = d;
+      break;
+    }
+  }
+  if (cellDepth === -1) return null;
+  const tableDepth = cellDepth - 2;
+  return {
+    pos: $from.before(tableDepth),
+    node: $from.node(tableDepth),
+    rowIdx: $from.index(tableDepth),
+    cellIdx: $from.index(cellDepth - 1),
+  };
+}
+
+function applyAlignToColumn(
+  view: EditorView,
+  info: TableInfo,
+  align: "left" | "center" | "right" | null,
+): void {
+  const tr = view.state.tr;
+  let pos = info.pos + 1; // inside table
+  info.node.forEach((row) => {
+    let cellPos = pos + 1; // inside row
+    row.forEach((cell, _o, idx) => {
+      if (idx === info.cellIdx) {
+        tr.setNodeMarkup(cellPos, null, { ...cell.attrs, align });
+      }
+      cellPos += cell.nodeSize;
+    });
+    pos += row.nodeSize;
+  });
+  view.dispatch(tr);
+  view.focus();
+}
+
+function deleteTable(view: EditorView, info: TableInfo): void {
+  const schema = view.state.schema;
+  const tr = view.state.tr;
+  const start = info.pos;
+  const end = start + info.node.nodeSize;
+  const para = schema.nodes.paragraph.create();
+  tr.replaceWith(start, end, para);
+  tr.setSelection(TextSelection.create(tr.doc, start + 1));
+  view.dispatch(tr);
+  view.focus();
+}
+
+function resizeTable(
+  view: EditorView,
+  info: TableInfo,
+  rows: number,
+  cols: number,
+): void {
+  if (rows < 1 || cols < 1) return;
+  const schema = view.state.schema;
+  const old = info.node;
+  const oldRows: PMNode[] = [];
+  old.forEach((r) => oldRows.push(r));
+
+  const newRows: PMNode[] = [];
+  for (let r = 0; r < rows; r++) {
+    const oldRow = oldRows[r];
+    const oldCells: PMNode[] = [];
+    if (oldRow) oldRow.forEach((c) => oldCells.push(c));
+    const cells: PMNode[] = [];
+    for (let c = 0; c < cols; c++) {
+      const oldCell = oldCells[c];
+      const isHeader = r === 0;
+      // Reuse alignment from the corresponding column in the old
+      // header row (if any) so resizing preserves user intent.
+      const align =
+        oldRows[0] && oldRows[0].child(c)
+          ? (oldRows[0].child(c).attrs.align as string | null)
+          : null;
+      const content = oldCell ? oldCell.content : null;
+      cells.push(
+        schema.nodes.table_cell.create(
+          { header: isHeader, align },
+          content,
+        ),
+      );
+    }
+    newRows.push(schema.nodes.table_row.create(null, cells));
+  }
+  const newTable = schema.nodes.table.create(null, newRows);
+  const tr = view.state.tr;
+  const start = info.pos;
+  const end = start + old.nodeSize;
+  tr.replaceWith(start, end, newTable);
+  // Place cursor inside the first body cell (or first cell if rows=1).
+  const firstBodyCell =
+    start + 1 + newRows[0]!.nodeSize + (rows > 1 ? 2 : -newRows[0]!.nodeSize + 2);
+  // ^ if rows>1: tableStart+1 (table) + headerSize + 1 (row open) + 1 (cell open)
+  //   if rows=1: tableStart+1 (table) + 1 (row open) + 1 (cell open)
+  const safePos = Math.min(firstBodyCell, tr.doc.content.size);
+  tr.setSelection(TextSelection.create(tr.doc, safePos));
+  view.dispatch(tr);
+  view.focus();
+}
+
+function svgIcon(paths: string, viewBox = "0 0 24 24"): SVGElement {
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", viewBox);
+  svg.setAttribute("width", "16");
+  svg.setAttribute("height", "16");
+  svg.innerHTML = paths;
+  return svg;
+}
+
+function buildToolbar(view: EditorView, getInfo: () => TableInfo | null): {
+  root: HTMLElement;
+  popup: HTMLElement;
+} {
+  const root = document.createElement("div");
+  root.className = "table-toolbar";
+
+  const grid = document.createElement("button");
+  grid.type = "button";
+  grid.className = "table-tb-btn";
+  grid.title = "Resize";
+  grid.appendChild(
+    svgIcon(
+      `<rect x='4' y='4' width='6' height='6' fill='currentColor'/>
+       <rect x='14' y='4' width='6' height='6' fill='currentColor'/>
+       <rect x='4' y='14' width='6' height='6' fill='currentColor'/>
+       <rect x='14' y='14' width='6' height='6' fill='currentColor'/>`,
+    ),
+  );
+
+  const sep = document.createElement("span");
+  sep.className = "table-tb-sep";
+
+  const mkAlign = (a: "left" | "center" | "right", lines: string) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "table-tb-btn";
+    b.title = `Align ${a}`;
+    b.dataset.align = a;
+    b.appendChild(svgIcon(lines));
+    b.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      const info = getInfo();
+      if (info) applyAlignToColumn(view, info, a);
+    });
+    return b;
+  };
+  const alignL = mkAlign(
+    "left",
+    `<line x1='4' y1='6' x2='20' y2='6' stroke='currentColor' stroke-width='2'/>
+     <line x1='4' y1='12' x2='14' y2='12' stroke='currentColor' stroke-width='2'/>
+     <line x1='4' y1='18' x2='18' y2='18' stroke='currentColor' stroke-width='2'/>`,
+  );
+  const alignC = mkAlign(
+    "center",
+    `<line x1='4' y1='6' x2='20' y2='6' stroke='currentColor' stroke-width='2'/>
+     <line x1='7' y1='12' x2='17' y2='12' stroke='currentColor' stroke-width='2'/>
+     <line x1='5' y1='18' x2='19' y2='18' stroke='currentColor' stroke-width='2'/>`,
+  );
+  const alignR = mkAlign(
+    "right",
+    `<line x1='4' y1='6' x2='20' y2='6' stroke='currentColor' stroke-width='2'/>
+     <line x1='10' y1='12' x2='20' y2='12' stroke='currentColor' stroke-width='2'/>
+     <line x1='6' y1='18' x2='20' y2='18' stroke='currentColor' stroke-width='2'/>`,
+  );
+
+  const spacer = document.createElement("span");
+  spacer.className = "table-tb-spacer";
+
+  const trash = document.createElement("button");
+  trash.type = "button";
+  trash.className = "table-tb-btn table-tb-trash";
+  trash.title = "Delete table";
+  trash.appendChild(
+    svgIcon(
+      `<path d='M5 7h14M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2M6 7l1 12a2 2 0 002 2h6a2 2 0 002-2l1-12'
+        stroke='currentColor' stroke-width='1.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/>`,
+    ),
+  );
+  trash.addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    const info = getInfo();
+    if (info) deleteTable(view, info);
+  });
+
+  root.append(grid, sep, alignL, alignC, alignR, spacer, trash);
+
+  // Resize popup — built once, toggled on grid click. Hover the grid
+  // to highlight up to (R, C); the numeric inputs reflect the hover
+  // and can be edited directly. Click the grid (or press Enter on the
+  // inputs) to commit.
+  const popup = document.createElement("div");
+  popup.className = "table-resize-popup";
+  popup.style.display = "none";
+
+  const gridEl = document.createElement("div");
+  gridEl.className = "table-resize-grid";
+  const MAX_R = 10;
+  const MAX_C = 10;
+  const cells: HTMLElement[][] = [];
+  for (let r = 0; r < MAX_R; r++) {
+    const row: HTMLElement[] = [];
+    for (let c = 0; c < MAX_C; c++) {
+      const cell = document.createElement("div");
+      cell.className = "table-resize-cell";
+      cell.dataset.r = String(r + 1);
+      cell.dataset.c = String(c + 1);
+      gridEl.appendChild(cell);
+      row.push(cell);
+    }
+    cells.push(row);
+  }
+
+  const inputs = document.createElement("div");
+  inputs.className = "table-resize-inputs";
+  const rIn = document.createElement("input");
+  rIn.type = "number";
+  rIn.min = "1";
+  rIn.max = "20";
+  const xLabel = document.createElement("span");
+  xLabel.textContent = "×";
+  const cIn = document.createElement("input");
+  cIn.type = "number";
+  cIn.min = "1";
+  cIn.max = "20";
+  inputs.append(rIn, xLabel, cIn);
+
+  const setHighlight = (R: number, C: number) => {
+    for (let r = 0; r < MAX_R; r++)
+      for (let c = 0; c < MAX_C; c++) {
+        cells[r]![c]!.classList.toggle("hover", r < R && c < C);
+      }
+    rIn.value = String(R);
+    cIn.value = String(C);
+  };
+  gridEl.addEventListener("mousemove", (e) => {
+    const t = (e.target as HTMLElement).closest(".table-resize-cell") as HTMLElement | null;
+    if (!t) return;
+    setHighlight(Number(t.dataset.r), Number(t.dataset.c));
+  });
+  gridEl.addEventListener("mousedown", (e) => {
+    const t = (e.target as HTMLElement).closest(".table-resize-cell") as HTMLElement | null;
+    if (!t) return;
+    e.preventDefault();
+    const info = getInfo();
+    if (!info) return;
+    resizeTable(view, info, Number(t.dataset.r), Number(t.dataset.c));
+    popup.style.display = "none";
+  });
+  const commitInputs = () => {
+    const info = getInfo();
+    if (!info) return;
+    const R = Math.max(1, Math.min(20, Number(rIn.value) || 1));
+    const C = Math.max(1, Math.min(20, Number(cIn.value) || 1));
+    resizeTable(view, info, R, C);
+    popup.style.display = "none";
+  };
+  rIn.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      commitInputs();
+    }
+  });
+  cIn.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      commitInputs();
+    }
+  });
+
+  popup.append(gridEl, inputs);
+
+  grid.addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    const info = getInfo();
+    if (!info) return;
+    if (popup.style.display === "block") {
+      popup.style.display = "none";
+      return;
+    }
+    // Initialize highlight to current dims.
+    let R = 0, C = 0;
+    info.node.forEach((row) => {
+      R++;
+      C = Math.max(C, row.childCount);
+    });
+    setHighlight(Math.min(R, MAX_R), Math.min(C, MAX_C));
+    // Anchor below the trigger button.
+    const r = grid.getBoundingClientRect();
+    popup.style.top = `${r.bottom + 4}px`;
+    popup.style.left = `${r.left}px`;
+    popup.style.display = "block";
+  });
+
+  return { root, popup };
+}
+
+function tableToolbarPlugin(): Plugin {
+  return new Plugin({
+    view(view) {
+      let info: TableInfo | null = null;
+      const getInfo = () => info;
+      const { root, popup } = buildToolbar(view, getInfo);
+      document.body.appendChild(root);
+      document.body.appendChild(popup);
+
+      const update = () => {
+        info = findTableAtSelection(view.state);
+        if (!info) {
+          root.style.display = "none";
+          popup.style.display = "none";
+          return;
+        }
+        const dom = view.nodeDOM(info.pos) as HTMLElement | null;
+        if (!dom) {
+          root.style.display = "none";
+          return;
+        }
+        const rect = dom.getBoundingClientRect();
+        root.style.display = "flex";
+        root.style.top = `${rect.top - 32}px`;
+        root.style.left = `${rect.left}px`;
+        // Reflect current column's align in the button states.
+        const cell = info.node.child(info.rowIdx).child(info.cellIdx);
+        const cur = cell.attrs.align as string | null;
+        root.querySelectorAll<HTMLElement>("[data-align]").forEach((b) => {
+          b.classList.toggle("active", b.dataset.align === cur);
+        });
+      };
+      update();
+
+      const onScroll = () => update();
+      window.addEventListener("scroll", onScroll, true);
+      window.addEventListener("resize", onScroll);
+
+      return {
+        update() {
+          update();
+        },
+        destroy() {
+          window.removeEventListener("scroll", onScroll, true);
+          window.removeEventListener("resize", onScroll);
+          root.remove();
+          popup.remove();
+        },
+      };
+    },
+  });
+}
+
 function tabCellNav(dir: 1 | -1) {
   return (state: import("prosemirror-state").EditorState,
     dispatch?: (tr: import("prosemirror-state").Transaction) => void): boolean => {
@@ -150,6 +526,8 @@ export const table: FeatureSpec = {
   },
 
   mdItPlugins: [(md) => md.enable("table")],
+
+  plugins: () => [tableToolbarPlugin()],
 
   keymap: (schema: Schema) => ({
     // Cell navigation. Tab / Shift-Tab move the cursor row-major; at the

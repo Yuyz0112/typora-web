@@ -160,21 +160,111 @@ html, body { margin: 0; padding: 0; font: 16px/1.6 -apple-system, system-ui, san
   display: none;
 }
 
-/* GFM table — minimal styling so the structure is visible. */
+/* GFM table — full-width Typora-style. */
 .ProseMirror table {
   border-collapse: collapse;
   margin: 8px 0;
   font-size: 0.95em;
+  width: 100%;
+  table-layout: fixed;
 }
 .ProseMirror table th,
 .ProseMirror table td {
   border: 1px solid #d0d0d0;
-  padding: 4px 10px;
+  padding: 6px 10px;
   vertical-align: top;
+  word-break: break-word;
 }
 .ProseMirror table th {
-  background: #f4f4f4;
+  background: #f7f7f7;
   font-weight: 600;
+}
+
+/* Floating toolbar above the focused table. position: fixed (viewport
+ * coords); plugin re-positions every transaction. */
+.table-toolbar {
+  position: fixed;
+  display: none;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  background: #fff;
+  border: 1px solid #e3e3e3;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  z-index: 10;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+.table-tb-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #555;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.table-tb-btn:hover { background: #f0f0f0; }
+.table-tb-btn.active { background: #e6e9ff; color: #3949ab; }
+.table-tb-trash:hover { background: #fde8e8; color: #c0392b; }
+.table-tb-sep {
+  width: 1px;
+  align-self: stretch;
+  background: #e3e3e3;
+  margin: 2px 4px;
+}
+.table-tb-spacer { flex: 1; min-width: 12px; }
+
+/* Resize popup — anchored under the grid trigger. */
+.table-resize-popup {
+  position: fixed;
+  display: none;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  padding: 14px;
+  z-index: 11;
+}
+.table-resize-grid {
+  display: grid;
+  grid-template-columns: repeat(10, 18px);
+  gap: 3px;
+  margin-bottom: 12px;
+}
+.table-resize-cell {
+  width: 18px;
+  height: 18px;
+  border: 1px solid #ccc;
+  border-radius: 2px;
+  background: #fff;
+  cursor: pointer;
+}
+.table-resize-cell.hover {
+  background: #909090;
+  border-color: #707070;
+}
+.table-resize-inputs {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-top: 1px solid #eee;
+  padding-top: 10px;
+  font: 13px/1 system-ui, -apple-system, sans-serif;
+  color: #555;
+}
+.table-resize-inputs input {
+  width: 36px;
+  padding: 4px 6px;
+  border: 1px solid #d0d0d0;
+  border-radius: 4px;
+  text-align: center;
+  font: inherit;
 }
 
 /* YAML front matter — code-block-like display at doc start. */
