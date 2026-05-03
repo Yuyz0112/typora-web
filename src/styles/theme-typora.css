@@ -1,0 +1,135 @@
+/*
+ * Typora-flavored minimal theme.
+ *
+ * Aesthetic only. Light, thin, restrained — closer to a manuscript
+ * than a GitHub README. No heading underlines, light borders, soft
+ * code background, generous line-height.
+ *
+ * All rules scope to `.ProseMirror` — the theme only styles the
+ * editor body, never the surrounding website chrome.
+ */
+
+.ProseMirror {
+  font-family: -apple-system, "PingFang SC", "Helvetica Neue", Helvetica,
+    Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  font-size: 16px;
+  line-height: 1.7;
+  color: #1f1f1f;
+  word-wrap: break-word;
+}
+
+/* ─── headings ───────────────────────────────────────────────────── */
+.ProseMirror h1,
+.ProseMirror h2,
+.ProseMirror h3,
+.ProseMirror h4,
+.ProseMirror h5,
+.ProseMirror h6 {
+  margin: 1.6em 0 0.8em;
+  font-weight: 600;
+  line-height: 1.3;
+  color: #1f1f1f;
+}
+.ProseMirror h1 { font-size: 1.75em; }
+.ProseMirror h2 { font-size: 1.45em; }
+.ProseMirror h3 { font-size: 1.2em; }
+.ProseMirror h4 { font-size: 1.05em; }
+.ProseMirror h5 { font-size: 1em; }
+.ProseMirror h6 { font-size: 0.95em; color: #666; }
+
+/* ─── paragraphs ─────────────────────────────────────────────────── */
+.ProseMirror p { margin: 0 0 1em; }
+.ProseMirror p:last-child { margin-bottom: 0; }
+
+/* ─── links ──────────────────────────────────────────────────────── */
+.ProseMirror a {
+  color: #4078c0;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(64, 120, 192, 0.25);
+}
+.ProseMirror a:hover {
+  border-bottom-color: #4078c0;
+}
+
+/* ─── inline code / pre ──────────────────────────────────────────── */
+.ProseMirror code {
+  font-family: "SF Mono", "Source Code Pro", Consolas, ui-monospace, monospace;
+  font-size: 0.9em;
+  padding: 0.15em 0.35em;
+  margin: 0;
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 3px;
+  white-space: break-spaces;
+}
+.ProseMirror pre {
+  font-family: "SF Mono", "Source Code Pro", Consolas, ui-monospace, monospace;
+  font-size: 0.88em;
+  line-height: 1.5;
+  background: #f8f8f8;
+  padding: 12px 14px;
+  margin: 0 0 1em;
+  border-radius: 4px;
+  overflow: auto;
+  border: 1px solid #ececec;
+}
+.ProseMirror pre code {
+  display: inline;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  border-radius: 0;
+  font-size: 100%;
+  white-space: pre;
+}
+
+/* ─── blockquote ─────────────────────────────────────────────────── */
+.ProseMirror blockquote {
+  margin: 0 0 1em;
+  padding: 0 0 0 1em;
+  color: #666;
+  border-left: 3px solid #ddd;
+}
+.ProseMirror blockquote > :first-child { margin-top: 0; }
+.ProseMirror blockquote > :last-child { margin-bottom: 0; }
+
+/* ─── lists ──────────────────────────────────────────────────────── */
+.ProseMirror ul,
+.ProseMirror ol {
+  margin: 0 0 1em;
+  padding-left: 1.6em;
+}
+.ProseMirror ul ul,
+.ProseMirror ul ol,
+.ProseMirror ol ul,
+.ProseMirror ol ol { margin-bottom: 0; }
+.ProseMirror li > p { margin-bottom: 0; }
+
+/* ─── horizontal rule ────────────────────────────────────────────── */
+.ProseMirror hr {
+  height: 1px;
+  padding: 0;
+  margin: 1.6em 0;
+  background: #ddd;
+  border: 0;
+}
+
+/* ─── tables (cells; layout from widgets.css) ────────────────────── */
+.ProseMirror table th,
+.ProseMirror table td {
+  padding: 6px 10px;
+  border: 1px solid #ddd;
+  vertical-align: top;
+}
+.ProseMirror table th {
+  font-weight: 600;
+  background: #fafafa;
+}
+
+/* ─── extension marks ────────────────────────────────────────────── */
+.ProseMirror mark {
+  background: #fff3a3;
+  color: inherit;
+  padding: 0 0.1em;
+  border-radius: 2px;
+}
+.ProseMirror del { color: inherit; }

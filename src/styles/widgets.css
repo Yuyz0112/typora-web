@@ -275,6 +275,21 @@
 .ProseMirror pre .cb-lang-input:focus { border-color: #1f1f1f; }
 .ProseMirror pre.cb-lang-focus .play-caret { display: none; }
 
+/* ─── Table layout (structural — always on; theme styles cells) ──── */
+/* Tables default to full editor width with a fixed layout so columns
+ * are predictable and the toolbar's anchor rect spans the editor.
+ * The cell border / padding / header bg come from the theme. */
+.ProseMirror table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  margin: 0 0 16px;
+}
+.ProseMirror table th,
+.ProseMirror table td {
+  word-break: break-word;
+}
+
 /* ─── Table toolbar (body-mounted floating UI) ───────────────────── */
 .table-toolbar {
   position: fixed;

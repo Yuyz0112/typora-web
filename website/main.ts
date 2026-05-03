@@ -3,7 +3,7 @@
 
 import "prosemirror-view/style/prosemirror.css";
 import "../src/styles/widgets.css";
-import "../src/styles/theme-github.css";
+import "../src/styles/theme-typora.css";
 import "./style.css";
 
 import { startRouter } from "./router.ts";

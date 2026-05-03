@@ -21,12 +21,8 @@ A *Typora-style* WYSIWYG Markdown editor on **ProseMirror**.
 
 ## How we work
 
-Every supported syntax has a **spec** — a sequence of input events
-plus expected pretty-printed output, ported from Typora's behavior.
-
-Browse the full catalog at [/specs](#/specs).
+Every supported syntax has a **spec** — a sequence of input events plus expected pretty-printed output, ported from Typora's behavior. Browse the full catalog at [/specs](#/specs).
 
 ## Reporting
 
-Found a Typora behavior we don't match? File an issue with a spec —
-seed text, event sequence, expected output. Same shape as ours.
+Found a Typora behavior we don't match? File an issue with a spec — seed text, event sequence, expected output. Same shape as ours.
