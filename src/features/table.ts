@@ -40,6 +40,52 @@ function alignDelim(align: string | null, width: number): string {
 // width measurement, then actual emission). We render via the same
 // inline serializer the rest of the doc uses, but into a sandbox so
 // pmPos/markers from the outer state don't leak.
+function tabCellNav(dir: 1 | -1) {
+  return (state: import("prosemirror-state").EditorState,
+    dispatch?: (tr: import("prosemirror-state").Transaction) => void): boolean => {
+    const $from = state.selection.$from;
+    let cellDepth = -1;
+    for (let d = $from.depth; d >= 0; d--) {
+      if ($from.node(d).type.name === "table_cell") {
+        cellDepth = d;
+        break;
+      }
+    }
+    if (cellDepth === -1) return false;
+    const rowDepth = cellDepth - 1;
+    const tableDepth = cellDepth - 2;
+    const cellIdx = $from.index(rowDepth);
+    const rowIdx = $from.index(tableDepth);
+    const tableNode = $from.node(tableDepth);
+    const row = $from.node(rowDepth);
+
+    let nextRow = rowIdx;
+    let nextCell = cellIdx + dir;
+    if (nextCell < 0) {
+      nextRow = rowIdx - 1;
+      if (nextRow < 0) return true; // first cell — consume, no-op
+      nextCell = tableNode.child(nextRow).childCount - 1;
+    } else if (nextCell >= row.childCount) {
+      nextRow = rowIdx + 1;
+      if (nextRow >= tableNode.childCount) return true; // last cell — consume, no-op
+      nextCell = 0;
+    }
+    if (dispatch) {
+      const tableStart = $from.before(tableDepth);
+      let pos = tableStart + 1; // inside table
+      for (let r = 0; r < nextRow; r++) pos += tableNode.child(r).nodeSize;
+      pos += 1; // inside row
+      const targetRow = tableNode.child(nextRow);
+      for (let c = 0; c < nextCell; c++) pos += targetRow.child(c).nodeSize;
+      pos += 1; // inside cell
+      dispatch(
+        state.tr.setSelection(TextSelection.create(state.doc, pos)),
+      );
+    }
+    return true;
+  };
+}
+
 function renderCellInline(cell: PMNode): string {
   // Minimal cell-content serializer — covers method-B marks (delim chars
   // already live in textContent) and avoids the circular import with
@@ -106,6 +152,13 @@ export const table: FeatureSpec = {
   mdItPlugins: [(md) => md.enable("table")],
 
   keymap: (schema: Schema) => ({
+    // Cell navigation. Tab / Shift-Tab move the cursor row-major; at the
+    // boundary (last/first cell) the keystroke is consumed but the
+    // selection is unchanged — that matches Typora and avoids letting
+    // browser focus escape the table.
+    Tab: tabCellNav(1),
+    "Shift-Tab": tabCellNav(-1),
+
     // Live trigger: a paragraph whose text is exactly `|c1|c2|...|`
     // (≥ 2 cells, leading + trailing pipes) commits to a table on Enter.
     // Cells split on `|`; first and last segments (empty by construction)
@@ -303,6 +356,82 @@ export const table: FeatureSpec = {
           at: 7,
           expect:
             "<table><tr><th>a</th><th></th><th>b</th></tr><tr><td>|</td><td></td><td></td></tr></table>",
+        },
+      ],
+    },
+    {
+      id: "tab-nav",
+      label: "Tab moves cursor through cells row-major; last cell stays put",
+      // Build a 2x2 table via commit, then Tab through the cells.
+      seed: "",
+      events: [
+        "|", "a", "|", "b", "|", "<Enter>", // header [a, b], body [_, _], cursor in body[0]
+        "x",                                  // body[0] = "x"
+        "<Tab>",                              // → body[1]
+        "y",                                  // body[1] = "y"
+        "<Tab>",                              // last cell → no-op
+      ],
+      checkpoints: [
+        // After commit, cursor in body[0].
+        {
+          at: 6,
+          expect:
+            "<table><tr><th>a</th><th>b</th></tr><tr><td>|</td><td></td></tr></table>",
+        },
+        // Type "x".
+        {
+          at: 7,
+          expect:
+            "<table><tr><th>a</th><th>b</th></tr><tr><td>x|</td><td></td></tr></table>",
+        },
+        // Tab → body[1].
+        {
+          at: 8,
+          expect:
+            "<table><tr><th>a</th><th>b</th></tr><tr><td>x</td><td>|</td></tr></table>",
+        },
+        // Type "y".
+        {
+          at: 9,
+          expect:
+            "<table><tr><th>a</th><th>b</th></tr><tr><td>x</td><td>y|</td></tr></table>",
+        },
+        // Last cell + Tab → cursor unchanged.
+        {
+          at: 10,
+          expect:
+            "<table><tr><th>a</th><th>b</th></tr><tr><td>x</td><td>y|</td></tr></table>",
+        },
+      ],
+    },
+    {
+      id: "shift-tab-nav",
+      label: "Shift-Tab moves cursor backwards; first cell stays put",
+      seed: "",
+      events: [
+        "|", "a", "|", "b", "|", "<Enter>", // body[0]
+        "<Shift-Tab>",                        // → header[1]
+        "<Shift-Tab>",                        // → header[0]
+        "<Shift-Tab>",                        // first cell → no-op
+      ],
+      checkpoints: [
+        // body[0] → header[1].
+        {
+          at: 7,
+          expect:
+            "<table><tr><th>a</th><th>|b</th></tr><tr><td></td><td></td></tr></table>",
+        },
+        // header[1] → header[0].
+        {
+          at: 8,
+          expect:
+            "<table><tr><th>|a</th><th>b</th></tr><tr><td></td><td></td></tr></table>",
+        },
+        // First cell + Shift-Tab → cursor unchanged.
+        {
+          at: 9,
+          expect:
+            "<table><tr><th>|a</th><th>b</th></tr><tr><td></td><td></td></tr></table>",
         },
       ],
     },
