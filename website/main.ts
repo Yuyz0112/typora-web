@@ -2,12 +2,12 @@ import type { Node as PMNode } from "prosemirror-model";
 import { EditorState, TextSelection } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 
-import { defaultPlugins } from "./editor.ts";
+import { defaultPlugins } from "../src/editor.ts";
 import { feedEvent, type Event } from "../specs/events.ts";
 import { collectCases } from "../specs/features/index.ts";
-import { parse } from "./parser.ts";
-import { serialize } from "./serializer.ts";
-import { schema } from "./schema.ts";
+import { parse } from "../src/parser.ts";
+import { serialize } from "../src/serializer.ts";
+import { schema } from "../src/schema.ts";
 import { pretty } from "../specs/pretty.ts";
 
 import "prosemirror-view/style/prosemirror.css";
