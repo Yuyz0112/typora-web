@@ -99,16 +99,65 @@ export function createEditor(
     view = buildView(md);
   }
 
+  // Resize the source textarea to its content height. Called on every
+  // input + on entering source mode so the page never shows a nested
+  // scrollbar inside the textarea.
+  function autoSizeSource(): void {
+    sourceTextarea.style.height = "auto";
+    sourceTextarea.style.height = `${sourceTextarea.scrollHeight}px`;
+  }
+
+  // Best-effort cursor mapping between rendered and source. Both
+  // directions cut/parse a prefix and use its length / content.size as
+  // the position. Mid-syntax cursors (e.g. between `*` and `bold` in
+  // an unclosed `*bold`) may land a few chars off, but plain prose and
+  // line boundaries are spot-on.
+  function renderedCursorToMdOffset(): number {
+    const sel = view.state.selection;
+    try {
+      const before = view.state.doc.cut(0, sel.from);
+      return serialize(before).length;
+    } catch {
+      return serialize(view.state.doc).length;
+    }
+  }
+  function mdOffsetToRenderedPos(md: string, offset: number): number {
+    try {
+      const beforeDoc = parse(md.slice(0, Math.max(0, offset)));
+      return beforeDoc.content.size;
+    } catch {
+      return 0;
+    }
+  }
+
   function enterSource(): void {
-    sourceTextarea.value = serialize(view.state.doc);
+    const md = serialize(view.state.doc);
+    const mdCursor = renderedCursorToMdOffset();
+    sourceTextarea.value = md;
     editorHost.hidden = true;
     sourceTextarea.hidden = false;
+    autoSizeSource();
     sourceTextarea.focus();
+    const clamped = Math.min(mdCursor, md.length);
+    sourceTextarea.setSelectionRange(clamped, clamped);
     inSource = true;
   }
 
   function exitSource(): void {
-    rebuild(sourceTextarea.value);
+    const md = sourceTextarea.value;
+    const mdCursor = sourceTextarea.selectionStart ?? md.length;
+    rebuild(md);
+    const target = Math.min(
+      mdOffsetToRenderedPos(md, mdCursor),
+      view.state.doc.content.size,
+    );
+    try {
+      view.dispatch(
+        view.state.tr.setSelection(
+          TextSelection.near(view.state.doc.resolve(target)),
+        ),
+      );
+    } catch {}
     sourceTextarea.hidden = true;
     editorHost.hidden = false;
     view.focus();
@@ -140,6 +189,9 @@ export function createEditor(
   if (options.onBlur) {
     sourceTextarea.addEventListener("blur", () => options.onBlur!());
   }
+  // Auto-grow the textarea as the user types so the page itself
+  // owns the scroll, never the textarea.
+  sourceTextarea.addEventListener("input", autoSizeSource);
 
   view = buildView(options.initialContent ?? "");
 

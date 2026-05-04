@@ -26,10 +26,13 @@
 .typora-web-source {
   display: block;
   width: 100%;
-  min-height: inherit;
+  /* Height is set by the JS `autoSizeSource` on each input — the
+   * textarea grows to match its content so the page never shows a
+   * nested scrollbar inside the source view. */
+  resize: none;
+  overflow: hidden;
   border: none;
   outline: none;
-  resize: vertical;
   font: 14px/1.65 ui-monospace, SFMono-Regular, Menlo, monospace;
   background: transparent;
   color: inherit;
