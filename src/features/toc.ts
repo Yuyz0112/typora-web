@@ -24,6 +24,12 @@ const liveViews = new Set<TocNodeView>();
 class TocNodeView implements NodeView {
   dom: HTMLElement;
   private view: EditorView;
+  // Cache the last rendered (doc, items) so the refresh plugin can
+  // bail out fast when nothing relevant to the TOC changed. Refresh
+  // fires on every transaction (including selection-only); without
+  // this, every keystroke re-walked the doc + rebuilt the DOM.
+  private lastDoc: PMNode | null = null;
+  private lastSig = "";
 
   constructor(_node: PMNode, view: EditorView) {
     this.view = view;
@@ -35,8 +41,10 @@ class TocNodeView implements NodeView {
   }
 
   render(): void {
+    const doc = this.view.state.doc;
+    if (doc === this.lastDoc) return; // selection-only tx → identical
     const items: { level: number; text: string; pos: number }[] = [];
-    this.view.state.doc.descendants((node, pos) => {
+    doc.descendants((node, pos) => {
       if (node.type.name === "heading") {
         items.push({
           level: node.attrs.level as number,
@@ -46,7 +54,18 @@ class TocNodeView implements NodeView {
       }
     });
 
-    // Clear and rebuild — small enough that diffing isn't worth it.
+    // Cheap signature so doc-changed-but-no-headings-changed (e.g. typing
+    // in a paragraph after the last heading) skips the DOM rebuild. Pos
+    // is included so jumpTo handlers stay accurate when text inserted
+    // earlier shifts later heading positions.
+    const sig = items.map((it) => `${it.pos}\t${it.level}\t${it.text}`).join("\n");
+    if (sig === this.lastSig && this.lastDoc !== null) {
+      this.lastDoc = doc;
+      return;
+    }
+    this.lastDoc = doc;
+    this.lastSig = sig;
+
     this.dom.innerHTML = "";
 
     if (items.length === 0) {

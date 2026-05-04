@@ -55,6 +55,9 @@ export type NormalizeState = {
   delims: DelimRange[];
   extras: ExtraDecoration[];
   widgets: WidgetDecoration[];
+  // Cached for appendTransaction's mark-sync pass — avoids walking the
+  // whole doc twice per transaction. Populated by state.apply / init.
+  blocks: Array<{ blockPos: number; plan: BlockPlan }>;
 };
 
 type BlockPlan = { blockStart: number; spans: InlineSpan[] };
@@ -132,25 +135,26 @@ export function normalizeInlinePlugin(): Plugin<NormalizeState> {
     key: normalizeKey,
 
     state: {
-      init: (_, state) => {
-        const p = computePlan(state.doc);
-        return { delims: p.delims, extras: p.extras, widgets: p.widgets };
-      },
-      apply: (_tr, _prev, _oldState, newState) => {
-        const p = computePlan(newState.doc);
-        return { delims: p.delims, extras: p.extras, widgets: p.widgets };
-      },
+      init: (_, state) => computePlan(state.doc),
+      apply: (tr, prev, _oldState, newState) =>
+        // Skip the doc walk when nothing in the doc changed — selection-
+        // only transactions are very common (every keystroke that moves
+        // the cursor) and the cached plan stays valid for them.
+        tr.docChanged ? computePlan(newState.doc) : prev,
     },
 
     appendTransaction(_transactions, _oldState, newState) {
-      // No `docChanged` guard: parsed-from-seed docs arrive with marks
-      // missing (the parser leaves text raw for method-B), and the very
-      // first tx (setSelection in setup) wouldn't trip a docChanged
-      // check. The per-mark diff below is the authoritative bail-out —
-      // when target marks already equal current, nothing dispatches.
-      const { blocks } = computePlan(newState.doc);
+      // Reuse the plan computed in state.apply rather than walking the
+      // doc a second time. (Caching cut a 50-blocks doc's per-tx
+      // overhead roughly in half.)
+      const planState = normalizeKey.getState(newState);
+      if (!planState) return null;
+      const { blocks } = planState;
       const tr = newState.tr;
       const managedNames = collectInlineFeatures().flatMap((f) => f.markNames);
+      const managedTypes = managedNames
+        .map((n) => schema.marks[n])
+        .filter((t): t is NonNullable<typeof t> => !!t);
       let changed = false;
 
       for (const { blockPos, plan } of blocks) {
@@ -160,10 +164,33 @@ export function normalizeInlinePlugin(): Plugin<NormalizeState> {
         const blockEnd = blockStart + blockNode.content.size;
         const size = blockNode.content.size;
 
-        // For each managed mark type, compute target vs current; diff; apply.
-        for (const name of managedNames) {
-          const markType = schema.marks[name];
-          if (!markType) continue;
+        // Fast skip: if this block has no spans for ANY managed type AND
+        // no existing managed marks on its text, there's nothing to
+        // reconcile — the most common case for plain prose paragraphs.
+        if (spans.length === 0) {
+          let hasManaged = false;
+          blockNode.content.forEach((child) => {
+            for (const mk of child.marks)
+              if (managedTypes.includes(mk.type)) { hasManaged = true; return; }
+          });
+          if (!hasManaged) continue;
+        }
+
+        for (const markType of managedTypes) {
+          const name = markType.name;
+
+          // Per-name fast skip: if no span of this type AND no existing
+          // mark of this type on the block, nothing to do.
+          let spansOfType = false;
+          for (const s of spans) if (s.type === name) { spansOfType = true; break; }
+          let hasMarkOfType = false;
+          if (!spansOfType) {
+            blockNode.content.forEach((child) => {
+              if (hasMarkOfType) return;
+              if (child.marks.some((mk) => mk.type === markType)) hasMarkOfType = true;
+            });
+            if (!hasMarkOfType) continue;
+          }
 
           // For attr-bearing marks (link, image) coverage equality isn't
           // enough — attrs (href / src / title) can change while coverage
