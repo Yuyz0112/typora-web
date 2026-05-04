@@ -6,6 +6,41 @@ Markdown looks like a finished document while you write it. Italic renders as *i
 
 It's also an experiment. Every line of source was written by an AI agent through chat. The human only chats; nothing gets typed directly into source files. To keep the agent productive at this scale, each supported syntax is described as a **spec**: a seed text, an event sequence, and the expected rendered output. Each spec compiles to a test the agent has to make pass. The result is a usable editor and a record of how far agent coding holds up on a serious project.
 
+## Install
+
+```sh
+npm install typora-web
+```
+
+## Usage
+
+```ts
+import { createEditor } from "typora-web";
+import "typora-web/widgets.css";
+import "typora-web/theme-typora.css";
+
+const editor = createEditor(document.querySelector("#app")!, {
+  initialContent: "# hello",
+  onChange: (md) => console.log(md),
+});
+```
+
+Controller methods:
+
+| Method / field | Description |
+|---|---|
+| `editor.getMarkdown()` | current markdown |
+| `editor.setMarkdown(md)` | replace contents |
+| `editor.toggleSource()` | flip rendered ↔ raw view (also bound to `⌘/` / `Ctrl+/`) |
+| `editor.isSourceMode()` | boolean |
+| `editor.focus()` | focus the active surface |
+| `editor.destroy()` | tear down |
+| `editor.view` | underlying ProseMirror EditorView. No stability guarantee on this access. |
+
+Options: `initialContent`, `onChange(md)`, `onFocus()`, `onBlur()`.
+
+Two themes ship: `typora-web/theme-typora.css` (default look on the live demo) and `typora-web/theme-github.css`. Import one. To roll your own, write a stylesheet that targets `.ProseMirror` descendants.
+
 ## Try it
 
 > If you're reading this on GitHub, the live editing effect won't show. Visit the [live demo][demo] for the actual editor.
