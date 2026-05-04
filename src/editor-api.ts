@@ -107,6 +107,55 @@ export function createEditor(
     sourceTextarea.style.height = `${sourceTextarea.scrollHeight}px`;
   }
 
+  // Find the Y pixel position (in viewport coords) of `offset` inside
+  // the textarea. Uses a hidden mirror div with matching font / width /
+  // padding / wrap so soft-wrapped lines map correctly.
+  function caretYInTextarea(offset: number): number | null {
+    const ta = sourceTextarea;
+    if (!ta.isConnected) return null;
+    const cs = window.getComputedStyle(ta);
+    const mirror = document.createElement("div");
+    const props = [
+      "fontFamily", "fontSize", "fontWeight", "fontStyle",
+      "letterSpacing", "lineHeight", "tabSize",
+      "paddingTop", "paddingRight", "paddingBottom", "paddingLeft",
+      "borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth",
+      "boxSizing", "whiteSpace", "wordBreak", "wordWrap", "width",
+    ] as const;
+    for (const p of props) {
+      (mirror.style as unknown as Record<string, string>)[p] = cs[p];
+    }
+    mirror.style.position = "absolute";
+    mirror.style.visibility = "hidden";
+    mirror.style.top = "0";
+    mirror.style.left = "0";
+    mirror.style.height = "auto";
+    const value = ta.value;
+    mirror.textContent = value.slice(0, offset);
+    const marker = document.createElement("span");
+    marker.textContent = "​"; // zero-width space
+    mirror.appendChild(marker);
+    mirror.appendChild(document.createTextNode(value.slice(offset) || " "));
+    document.body.appendChild(mirror);
+    const markerRect = marker.getBoundingClientRect();
+    const mirrorRect = mirror.getBoundingClientRect();
+    const taRect = ta.getBoundingClientRect();
+    document.body.removeChild(mirror);
+    return taRect.top + (markerRect.top - mirrorRect.top);
+  }
+
+  function scrollTextareaCursorIntoView(): void {
+    const offset = sourceTextarea.selectionStart;
+    if (offset == null) return;
+    const y = caretYInTextarea(offset);
+    if (y == null) return;
+    const pageY = y + window.scrollY;
+    // Aim for the cursor to land roughly 1/3 down the viewport — same
+    // visual band PM's tr.scrollIntoView uses for the rendered editor.
+    const target = pageY - window.innerHeight / 3;
+    window.scrollTo({ top: target, behavior: "instant" as ScrollBehavior });
+  }
+
   // Best-effort cursor mapping between rendered and source. Both
   // directions cut/parse a prefix and use its length / content.size as
   // the position. Mid-syntax cursors (e.g. between `*` and `bold` in
@@ -115,16 +164,14 @@ export function createEditor(
   function renderedCursorToMdOffset(): number {
     const sel = view.state.selection;
     try {
-      const before = view.state.doc.cut(0, sel.from);
-      return serialize(before).length;
+      return serialize(view.state.doc.cut(0, sel.from)).length;
     } catch {
       return serialize(view.state.doc).length;
     }
   }
   function mdOffsetToRenderedPos(md: string, offset: number): number {
     try {
-      const beforeDoc = parse(md.slice(0, Math.max(0, offset)));
-      return beforeDoc.content.size;
+      return parse(md.slice(0, Math.max(0, offset))).content.size;
     } catch {
       return 0;
     }
@@ -140,23 +187,22 @@ export function createEditor(
     sourceTextarea.focus();
     const clamped = Math.min(mdCursor, md.length);
     sourceTextarea.setSelectionRange(clamped, clamped);
+    scrollTextareaCursorIntoView();
     inSource = true;
   }
 
   function exitSource(): void {
     const md = sourceTextarea.value;
     const mdCursor = sourceTextarea.selectionStart ?? md.length;
+    const targetRaw = mdOffsetToRenderedPos(md, mdCursor);
     rebuild(md);
-    const target = Math.min(
-      mdOffsetToRenderedPos(md, mdCursor),
-      view.state.doc.content.size,
-    );
+    const target = Math.min(targetRaw, view.state.doc.content.size);
     try {
-      view.dispatch(
-        view.state.tr.setSelection(
-          TextSelection.near(view.state.doc.resolve(target)),
-        ),
-      );
+      const sel = TextSelection.near(view.state.doc.resolve(target));
+      // scrollIntoView() flag asks PM to nudge the cursor into the
+      // visible band post-dispatch — without it the page stays
+      // wherever the textarea left it.
+      view.dispatch(view.state.tr.setSelection(sel).scrollIntoView());
     } catch {}
     sourceTextarea.hidden = true;
     editorHost.hidden = false;
