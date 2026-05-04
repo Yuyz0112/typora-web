@@ -62,6 +62,27 @@ function previewSeed(seed: string): string {
   return oneLine.length > 56 ? oneLine.slice(0, 53) + "…" : oneLine;
 }
 
+// Render `<code>` spans inside a case label. The labels are author-
+// written strings (not user input) so escaping is mostly cosmetic — but
+// HTML-escape everything else just to be safe.
+function renderLabelHTML(text: string): string {
+  const parts: string[] = [];
+  let i = 0;
+  while (i < text.length) {
+    if (text[i] === "`") {
+      const end = text.indexOf("`", i + 1);
+      if (end > i) {
+        parts.push(`<code>${escapeHTML(text.slice(i + 1, end))}</code>`);
+        i = end + 1;
+        continue;
+      }
+    }
+    parts.push(escapeHTML(text[i]!));
+    i++;
+  }
+  return parts.join("");
+}
+
 // Build the initial EditorState for a given script. Same recipe used
 // by both the live mount and the headless simulation, so the two
 // agree on starting selection + initial normalize pass.
@@ -146,7 +167,8 @@ export function createCaseCard(script: Script): CaseCard {
       </div>
     </div>
   `;
-  (el.querySelector(".case-label") as HTMLElement).textContent = script.label;
+  (el.querySelector(".case-label") as HTMLElement).innerHTML =
+    renderLabelHTML(script.label);
   const $seed = el.querySelector(".case-seed") as HTMLElement;
   $seed.textContent = previewSeed(script.seed);
   if (!script.seed) $seed.classList.add("is-empty");
