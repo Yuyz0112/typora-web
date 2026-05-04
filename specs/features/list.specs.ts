@@ -80,6 +80,37 @@ export const listSpecs: FeatureSpecs = {
 
     // ── 7. Nested staircase exit ────────────────────────────────────────
     {
+      id: "digit-dot-space-wraps",
+      label: "`1. ` wraps current paragraph into an ordered list (start = 1)",
+      seed: "",
+      events: ["1", ".", " "],
+      checkpoints: [
+        { at: 2, expect: "1.|" },
+        { at: 3, expect: "<ol><li>|</li></ol>" },
+      ],
+    },
+    {
+      id: "ol-non-1-start",
+      label: "`5. ` wraps with start=5; serializer emits 5./6./7.",
+      seed: "",
+      events: ["5", ".", " ", "a", "<Enter>", "b"],
+      checkpoints: [
+        { at: 3, expect: "<ol s=5><li>|</li></ol>" },
+        { at: 4, expect: "<ol s=5><li>a|</li></ol>" },
+        { at: 5, expect: "<ol s=5><li>a</li><li>|</li></ol>" },
+        { at: 6, expect: "<ol s=5><li>a</li><li>b|</li></ol>" },
+      ],
+    },
+    {
+      id: "ol-parse-roundtrip",
+      label: "Ordered list parses from `1. a\\n2. b` and round-trips",
+      seed: "1. a\n2. b\n3. c",
+      events: [],
+      checkpoints: [
+        { at: 0, expect: "<ol><li>a</li><li>b</li><li>c|</li></ol>" },
+      ],
+    },
+    {
       id: "lone-empty-enter-creates-sibling",
       label: "Enter on a lone empty top-level item creates a new sibling (matches task list)",
       seed: "",
