@@ -5,7 +5,7 @@
 
 import { mountNav } from "../components/nav.ts";
 import { mountFreeEditor } from "../components/free-editor.ts";
-import preset from "../preset.md?raw";
+import preset from "../../README.md?raw";
 
 export function homeRoute(root: HTMLElement): () => void {
   mountNav(root, "/");
