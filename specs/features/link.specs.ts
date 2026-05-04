@@ -84,6 +84,37 @@ export const linkSpecs: FeatureSpecs = {
       ],
     },
     {
+      id: "link-with-code-inside",
+      label: "[`code`](url) — inline code nests inside link text",
+      seed: "[`/specs`](https://x.com)",
+      events: [],
+      // The text segments split on mark coverage: the backticks carry
+      // only the link mark (rendered as <a> wrapping a hidden delim
+      // char, hence the visually-empty <l:url></l> spans); `/specs`
+      // carries link + code, rendered with code on the outside per
+      // PM's mark-order resolution.
+      checkpoints: [
+        {
+          at: 0,
+          expect:
+            "<g>[</g><l:https://x.com></l><c><l:https://x.com>/specs</l></c><l:https://x.com></l><g>](https://x.com)</g>|",
+        },
+      ],
+    },
+    {
+      id: "link-with-em-inside",
+      label: "[*emph*](url) — em nests inside link text",
+      seed: "[*emph*](https://x.com)",
+      events: [],
+      checkpoints: [
+        {
+          at: 0,
+          expect:
+            "<g>[</g><l:https://x.com></l><i><l:https://x.com>emph</l></i><l:https://x.com></l><g>](https://x.com)</g>|",
+        },
+      ],
+    },
+    {
       id: "empty-link",
       label: "[]() — empty text + empty href, all chars are delim",
       seed: "",

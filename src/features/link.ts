@@ -23,15 +23,6 @@ const scan: InlineFeatureSpec["scan"] = (text, consumed) => {
   while ((m = LINK_RE.exec(text))) {
     const fullStart = m.index;
     const fullEnd = fullStart + m[0].length;
-    let blocked = false;
-    for (let i = fullStart; i < fullEnd; i++) {
-      if (consumed[i]) {
-        blocked = true;
-        break;
-      }
-    }
-    if (blocked) continue;
-
     const openFrom = fullStart;
     const openTo = fullStart + 1; // after `[`
     const contentFrom = openTo;
@@ -39,7 +30,25 @@ const scan: InlineFeatureSpec["scan"] = (text, consumed) => {
     const closeFrom = contentTo;
     const closeTo = fullEnd;
 
-    markConsumed(consumed, fullStart, fullEnd);
+    // Only the chrome (`[` and `](url "title")`) needs to be unclaimed.
+    // The text portion may legitimately overlap with code / em / strong /
+    // emoji etc. — those nest inside link text and must keep their
+    // marks. Bail only when something else has consumed a chrome char.
+    let blocked = false;
+    for (let i = openFrom; i < openTo; i++) {
+      if (consumed[i]) { blocked = true; break; }
+    }
+    if (!blocked) {
+      for (let i = closeFrom; i < closeTo; i++) {
+        if (consumed[i]) { blocked = true; break; }
+      }
+    }
+    if (blocked) continue;
+
+    // Claim chrome only; leave the text-portion bitmap untouched so
+    // any earlier feature's spans there stay live.
+    markConsumed(consumed, openFrom, openTo);
+    markConsumed(consumed, closeFrom, closeTo);
     const href = m[2]!;
     const title = m[3] ?? null;
     const span: InlineSpan = {
