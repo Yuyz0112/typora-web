@@ -1,16 +1,38 @@
 {
   "name": "typora-web",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.0.1",
+  "description": "A Typora-style Markdown editor for the web.",
   "license": "MIT",
   "author": "Yanzhen Yu",
+  "homepage": "https://yuyz0112.github.io/typora-web/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Yuyz0112/typora-web.git"
+  },
   "type": "module",
+  "main": "./dist/lib/typora-web.js",
+  "module": "./dist/lib/typora-web.js",
+  "exports": {
+    ".": {
+      "import": "./dist/lib/typora-web.js"
+    },
+    "./widgets.css": "./src/styles/widgets.css",
+    "./theme-typora.css": "./src/styles/theme-typora.css",
+    "./theme-github.css": "./src/styles/theme-github.css"
+  },
+  "files": [
+    "dist/lib",
+    "src/styles",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "dev": "vp dev",
     "build": "tsc && vp build",
     "build:lib": "tsc && vp build --config vite.lib.config.ts",
     "preview": "vp preview",
-    "test": "vp test --run"
+    "test": "vp test --run",
+    "prepublishOnly": "npm run build:lib"
   },
   "devDependencies": {
     "@types/markdown-it": "^14.1.2",

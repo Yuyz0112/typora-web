@@ -7,6 +7,8 @@ import { resolve } from "node:path";
 // external (consumers bring their own).
 
 export default defineConfig({
+  // No public assets — the lib doesn't ship a favicon.
+  publicDir: false,
   build: {
     lib: {
       entry: resolve(__dirname, "src/lib.ts"),
