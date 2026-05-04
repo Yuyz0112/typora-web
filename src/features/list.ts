@@ -202,6 +202,45 @@ function liftBulletlessParagraphToListItem(li: NodeType): Command {
 //   [PROBABLY WRONG] — structural guess; almost certainly needs tweaking
 //                      after the real implementation lands
 
+// Enter on a LONE empty top-level list_item (no previous sibling)
+// creates a new empty sibling instead of exiting. Matches task-list
+// behavior — when the user has typed `- ` (or `- [ ]`) and pressed
+// Enter, they're presumably about to type the next list item; jumping
+// straight out of the list on the first Enter makes the editor feel
+// jumpy. Two empty Enters still exit, because the second one runs on
+// an empty li that now has a previous sibling and falls through to
+// the chain's lift step.
+//
+// Nested empty li keeps the staircase exit (this command no-ops when
+// the wrapping list isn't a direct child of the doc).
+export function propagateEmptyLoneTopLevelListItem(li: NodeType): Command {
+  return (state, dispatch) => {
+    const { $from, empty } = state.selection;
+    if (!empty) return false;
+    if (!$from.parent.isTextblock || $from.parent.content.size !== 0) return false;
+    let liDepth = -1;
+    for (let d = $from.depth; d > 0; d--) {
+      if ($from.node(d).type === li) { liDepth = d; break; }
+    }
+    if (liDepth === -1) return false;
+    const ulDepth = liDepth - 1;
+    if (ulDepth !== 1) return false; // top-level only
+    if ($from.index(ulDepth) !== 0) return false; // first li, no prev sibling
+
+    if (dispatch) {
+      const liEnd = $from.after(liDepth);
+      const newLi = li.createAndFill();
+      if (!newLi) return false;
+      const tr = state.tr.insert(liEnd, newLi);
+      // Land in the new li's first textblock — same shape as
+      // splitListItem leaves the cursor.
+      tr.setSelection(TextSelection.create(tr.doc, liEnd + 2));
+      dispatch(tr);
+    }
+    return true;
+  };
+}
+
 // Backspace from an empty top-level textblock whose previous sibling is a
 // list: delete the empty block and place the cursor at the end of the
 // list's deepest last textblock. Matches Typora's behavior — the empty
@@ -266,6 +305,7 @@ export const list: FeatureSpec = {
       Enter: chainCommands(
         liftNestedEmptyItemToBulletless(li, p),
         liftBulletlessParagraphToListItem(li),
+        propagateEmptyLoneTopLevelListItem(li),
         splitListItem(li),
         liftListItem(li),
       ),

@@ -80,6 +80,19 @@ export const listSpecs: FeatureSpecs = {
 
     // ── 7. Nested staircase exit ────────────────────────────────────────
     {
+      id: "lone-empty-enter-creates-sibling",
+      label: "Enter on a lone empty top-level item creates a new sibling (matches task list)",
+      seed: "",
+      events: ["-", " ", "<Enter>", "<Enter>"],
+      checkpoints: [
+        { at: 2, expect: "<ul><li>|</li></ul>" },
+        // First Enter creates a new sibling rather than exiting (was: exit immediately).
+        { at: 3, expect: "<ul><li></li><li>|</li></ul>" },
+        // Second Enter on the now-with-prev empty exits.
+        { at: 4, expect: "<ul><li></li></ul>\n|" },
+      ],
+    },
+    {
       id: "staircase-exit",
       label: "Nested empty item + repeated Enter: 3-step Typora staircase",
       seed: "- a\n  - b",
