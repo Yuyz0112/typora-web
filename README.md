@@ -106,6 +106,16 @@ Specs are the project's core design choice and the harness the agent works in. E
 
 The catalog lives at the [`/specs`][demo-specs] page in the live demo, where each card is a spec you can step through.
 
+## Contributing
+
+Bug reports and feature requests are accepted as specs. If a Typora behavior isn't matched, file an issue with:
+
+- a **seed** (the markdown the editor starts from; can be empty)
+- an **event sequence** (the keys you press; the same DSL existing specs use)
+- the **rendered output** Typora produces
+
+The "report" link on every card in the [live demo's catalog][demo-specs] prefills an issue with seed, events, and observed output ready for you to fill in.
+
 [demo]: https://yuyz0112.github.io/typora-web/ "live demo"
 [demo-specs]: https://yuyz0112.github.io/typora-web/#/specs "spec catalog"
 [cm]: https://spec.commonmark.org/ "CommonMark"
