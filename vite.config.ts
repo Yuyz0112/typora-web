@@ -1,11 +1,14 @@
 import { defineConfig } from "vite-plus";
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   // The website (harness UI + specs panel) lives under website/. Vite's
   // dev server / build use it as the doc root so index.html resolves
   // correctly. Lib mode (built separately, see src/lib.ts) does NOT
   // share this root — it bundles src/ only.
   root: "website",
+  // GitHub Pages serves the site from a subpath (`/typora-web/`); only
+  // the production build needs this — dev still serves from `/`.
+  base: command === "build" ? "/typora-web/" : "/",
   build: {
     outDir: "../dist/website",
     emptyOutDir: true,
@@ -17,4 +20,4 @@ export default defineConfig({
     root: ".",
     environment: "happy-dom",
   },
-});
+}));
