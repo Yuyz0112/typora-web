@@ -1,11 +1,10 @@
-// "/" — the Editor route. A single, freely editable PM view preloaded
-// with `preset.md`. The preset markdown is itself the marketing copy
-// — it explains the project AND demonstrates ~10 syntax features just
-// by being rendered.
+// "/" — the editor route. Loads README.md into a single live editor.
+// Uses the public `createEditor` API end-to-end (dogfooding the npm
+// surface from our own home page).
 
+import { createEditor } from "../../src/lib.ts";
 import { mountNav } from "../components/nav.ts";
-import { mountFreeEditor } from "../components/free-editor.ts";
-import preset from "../../README.md?raw";
+import readme from "../../README.md?raw";
 
 export function homeRoute(root: HTMLElement): () => void {
   mountNav(root, "/");
@@ -22,7 +21,7 @@ export function homeRoute(root: HTMLElement): () => void {
   root.append(main);
 
   const host = main.querySelector(".hero-editor") as HTMLElement;
-  const editor = mountFreeEditor(host, { initialMd: preset });
+  const editor = createEditor(host, { initialContent: readme });
 
   return () => {
     editor.destroy();

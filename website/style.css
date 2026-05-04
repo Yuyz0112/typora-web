@@ -84,23 +84,16 @@ html, body {
 }
 .page-home .route-footer a:hover { color: #1f1f1f; border-bottom-color: #1f1f1f; }
 
-/* ─── free editor ────────────────────────────────────────────────── */
-.free-editor-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-/* Paper. The editor on the home page is a physical sheet floating
- * over the off-white page — soft layered shadow, white surface,
- * generous typographic margins. Source textarea inherits the same
- * box so ⌘/ toggling doesn't shift layout. The skeuomorphic feel is
- * scoped to .page-home; specs page and other surfaces stay flat.
+/* ─── home: paper around the createEditor() surface ──────────────── */
+/* The lib's createEditor() mounts a `.typora-web-wrap` containing a
+ * `.typora-web-editor-host` (the PM view) and a hidden
+ * `.typora-web-source` (the textarea for ⌘/ source mode). On home we
+ * style the wrap as a paper sheet floating over the off-white page;
+ * specs and other routes stay flat.
  *
- * Two-layer shadow: a tight close one for crisp edge definition,
- * a wider soft one for ambient depth. Same recipe as Bear / Notion /
- * Typora's own editor surface. */
-.page-home .free-editor-host,
-.page-home .free-source {
+ * Two-layer shadow: tight close + wider ambient (Bear / Notion /
+ * Typora's own surface). */
+.page-home .typora-web-wrap {
   min-height: 420px;
   padding: 20px 40px 40px;
   background: #fff;
@@ -110,37 +103,14 @@ html, body {
     0 8px 32px rgba(0, 0, 0, 0.06);
   box-sizing: border-box;
 }
-.page-home .free-source {
-  width: 100%;
-  resize: vertical;
-  border: none;
-  outline: none;
+.page-home .typora-web-source {
   font: 14px/1.7 ui-monospace, SFMono-Regular, Menlo, monospace;
   color: #555;
-  white-space: pre-wrap;
-  word-break: break-word;
-  tab-size: 2;
 }
-/* Wider page padding under the home so the paper has visible room
- * around it on small screens — the shadow needs negative space to
- * read as elevation. */
 .page-home {
   padding-top: 16px;
   padding-bottom: 80px;
   max-width: 920px;
-}
-
-.free-dumps { font-size: 12px; color: #999; margin-top: 24px; }
-.free-dumps summary { cursor: pointer; padding: 6px 0; }
-.free-dumps pre {
-  margin: 4px 0;
-  padding: 10px 12px;
-  background: #fafafa;
-  border-radius: 4px;
-  font: 11.5px/1.5 ui-monospace, monospace;
-  white-space: pre-wrap;
-  word-break: break-word;
-  color: #555;
 }
 
 /* ─── /spec page ──────────────────────────────────────────────────── */

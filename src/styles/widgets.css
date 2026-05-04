@@ -16,6 +16,31 @@
  * top of it.
  */
 
+/* ─── createEditor() façade scaffolding ──────────────────────────── */
+/* Rendered editor and source textarea share a wrapper so toggling
+ * `editor.toggleSource()` keeps layout stable. The textarea baseline
+ * here is just enough to make source mode usable out of the box;
+ * consumers can override with their own font / colors. */
+.typora-web-wrap { display: block; }
+.typora-web-editor-host { display: block; }
+.typora-web-source {
+  display: block;
+  width: 100%;
+  min-height: inherit;
+  border: none;
+  outline: none;
+  resize: vertical;
+  font: 14px/1.65 ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: transparent;
+  color: inherit;
+  white-space: pre-wrap;
+  word-break: break-word;
+  tab-size: 2;
+  box-sizing: border-box;
+  padding: 0;
+}
+.typora-web-source[hidden] { display: none; }
+
 /* ─── PM root reset ──────────────────────────────────────────────── */
 .ProseMirror {
   outline: none;
