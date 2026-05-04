@@ -67,7 +67,10 @@ const scan: InlineFeatureSpec["scan"] = (text, consumed) => {
           pos: fullStart,
           when: "always",
           kind: "emoji",
-          attrs: { glyph },
+          // `len` carries the `:name:` source length so a click on the
+          // glyph can place the cursor at the span's tail rather than
+          // the head (PM's default for a widget at side=-1).
+          attrs: { glyph, len: String(fullEnd - fullStart) },
           side: -1,
         },
       ],
@@ -351,6 +354,32 @@ export const emoji: FeatureSpec = {
             view.dom.removeEventListener("emoji-autocomplete-pick", handler);
           },
         };
+      },
+    }),
+    // Clicking the rendered glyph drops the caret at the *tail* of the
+    // `:name:` source rather than the head. PM's default for a widget
+    // at side=-1 puts the cursor right before the widget, which lands
+    // visually outside the emoji span — the source chars are hidden and
+    // the user thinks the click did nothing.
+    new Plugin({
+      props: {
+        handleClick(view, _pos, event) {
+          const target = event.target as HTMLElement | null;
+          const glyph = target?.closest(".emoji-glyph") as HTMLElement | null;
+          if (!glyph) return false;
+          const len = Number(glyph.getAttribute("data-len") ?? "0");
+          if (!len) return false;
+          const widgetPos = view.posAtDOM(glyph, 0);
+          if (widgetPos < 0) return false;
+          const tail = widgetPos + len;
+          if (tail > view.state.doc.content.size) return false;
+          event.preventDefault();
+          view.dispatch(
+            view.state.tr.setSelection(TextSelection.create(view.state.doc, tail)),
+          );
+          view.focus();
+          return true;
+        },
       },
     }),
   ],

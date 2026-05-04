@@ -27,9 +27,12 @@ const widgetBuilders: Record<string, (attrs: Record<string, string>) => HTMLElem
     // Glyph rendered at the span's start, before the (often-hidden)
     // `:name:` source chars. textContent is the unicode glyph; nothing
     // fancy — emoji rendering is a font/system concern, not ours.
+    // `data-len` carries the source length (`:name:` chars) so the
+    // emoji feature's click handler can set the cursor to the tail.
     const el = document.createElement("span");
     el.className = "emoji-glyph";
     el.textContent = attrs.glyph ?? "";
+    if (attrs.len) el.setAttribute("data-len", attrs.len);
     return el;
   },
   "image-render": (attrs) => {
