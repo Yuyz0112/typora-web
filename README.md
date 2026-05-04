@@ -1,12 +1,10 @@
 # typora-web
 
-[toc]
+> A Typora-style Markdown editor for the web.
 
-**typora-web** is a WYSIWYG Markdown editor for the browser, modeled on [Typora][typora] and built on [ProseMirror][pmguide]. The page you're reading is the editor itself — click anywhere and start typing. Source and rendered view are the same view: `*em*` becomes *em* in place, the `*` chars stay in the document, and they fade in only when the cursor is near them.
+A structured editor where source and rendered view are the same view: `*em*` shows as *em* in place, the `*` chars stay in the document, and fade in only when the cursor is near them. Under the hood it's a [ProseMirror][pmguide] document with a Markdown parser/serializer pinned together so `parse → serialize → parse` produces an identical doc — visual editing without losing the original source shape.
 
-Under the hood it's a structured ProseMirror document with a Markdown parser/serializer pinned together so `parse → serialize → parse` produces an identical doc. That means you can edit visually without ever losing the original source shape, and you can pop into raw view at any moment to confirm.
-
-<!-- this whole page is the live demo; edit freely -->
+What you're reading right now is the editor itself. Click anywhere and start typing.
 
 ## Try it
 

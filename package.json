@@ -1,7 +1,9 @@
 {
-  "name": "app",
+  "name": "typora-web",
   "version": "0.0.0",
   "private": true,
+  "license": "MIT",
+  "author": "Yanzhen Yu",
   "type": "module",
   "scripts": {
     "dev": "vp dev",
