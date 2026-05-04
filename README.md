@@ -6,6 +6,34 @@ Markdown looks like a finished document while you write it. Italic renders as *i
 
 It's also an experiment. Every line of source was written by an AI agent through chat. The human only chats; nothing gets typed directly into source files. To keep the agent productive at this scale, each supported syntax is described as a **spec**: a seed text, an event sequence, and the expected rendered output. Each spec compiles to a test the agent has to make pass. The result is a usable editor and a record of how far agent coding holds up on a serious project.
 
+## Try it
+
+> If you're reading this on GitHub, the live editing effect won't show. Visit the [live demo][demo] for the actual editor.
+
+Inline marks: **bold**, *italic*, `inline code`, ~~strike~~, ==highlight==, sub like H~2~O, sup like E = mc^2^. Bare URLs in angle brackets become autolinks: <https://prosemirror.net>. Regular links work the usual way: [ProseMirror guide][pmguide], [CommonMark spec][cm]. Emoji shortcodes resolve as you type: :books: :tada: :hourglass: :warning:.
+
+Task lists hold their state visually:
+
+- [x] inline marks (em, strong, code, strike, highlight, sub/sup)
+- [x] autolinks and reference-style links
+- [x] tables with per-column alignment
+- [ ] inline and block math (planned, KaTeX-based)
+- [ ] diagram fences like mermaid (planned, opt-in)
+
+Lists nest, and exit on a triple-Enter staircase the way Typora does:
+
+1. outer ordered item
+   - nested bullet with a `code span`
+   - another, with **bold** in it
+     1. third level
+2. back to the outer list
+
+> Blockquotes render inline marks just like paragraphs do. You can drop ==highlights==, [links](https://typora.io), or `code` into a quote and the source still round-trips byte for byte.
+>
+> Press Enter on an empty quote line to exit.
+
+Press `⌘/` (or `Ctrl+/`) at any time to toggle between rendered and raw source view.
+
 ## Install
 
 ```sh
@@ -40,34 +68,6 @@ Controller methods:
 Options: `initialContent`, `onChange(md)`, `onFocus()`, `onBlur()`.
 
 Two themes ship: `typora-web/theme-typora.css` (default look on the live demo) and `typora-web/theme-github.css`. Import one. To roll your own, write a stylesheet that targets `.ProseMirror` descendants.
-
-## Try it
-
-> If you're reading this on GitHub, the live editing effect won't show. Visit the [live demo][demo] for the actual editor.
-
-Inline marks: **bold**, *italic*, `inline code`, ~~strike~~, ==highlight==, sub like H~2~O, sup like E = mc^2^. Bare URLs in angle brackets become autolinks: <https://prosemirror.net>. Regular links work the usual way: [ProseMirror guide][pmguide], [CommonMark spec][cm]. Emoji shortcodes resolve as you type: :books: :tada: :hourglass: :warning:.
-
-Task lists hold their state visually:
-
-- [x] inline marks (em, strong, code, strike, highlight, sub/sup)
-- [x] autolinks and reference-style links
-- [x] tables with per-column alignment
-- [ ] inline and block math (planned, KaTeX-based)
-- [ ] diagram fences like mermaid (planned, opt-in)
-
-Lists nest, and exit on a triple-Enter staircase the way Typora does:
-
-1. outer ordered item
-   - nested bullet with a `code span`
-   - another, with **bold** in it
-     1. third level
-2. back to the outer list
-
-> Blockquotes render inline marks just like paragraphs do. You can drop ==highlights==, [links](https://typora.io), or `code` into a quote and the source still round-trips byte for byte.
->
-> Press Enter on an empty quote line to exit.
-
-Press `⌘/` (or `Ctrl+/`) at any time to toggle between rendered and raw source view.
 
 ## Coverage
 
