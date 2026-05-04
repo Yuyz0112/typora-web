@@ -157,7 +157,6 @@ html, body {
   font-size: 14px;
   margin: 0 0 24px;
   line-height: 1.55;
-  max-width: 60ch;
 }
 .specs-meta strong {
   color: #1f1f1f;
