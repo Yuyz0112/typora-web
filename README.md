@@ -32,19 +32,7 @@ Lists nest, and exit on a triple-Enter staircase the way Typora does:
 >
 > Press Enter on an empty quote line to exit.
 
-## Editor behaviors
-
-A few interactions worth knowing:
-
-- **`⌘/`** (or `Ctrl+/`) toggles between rendered and raw source view.
-- **`⌘`-click** a link to open it; plain click places the cursor inside, where the URL becomes editable.
-- **Click a task checkbox** to toggle done/undone — no need to edit the `[ ]`.
-- **Inside a table**: `Tab` / `Shift+Tab` moves between cells; the floating toolbar on focus has a hover-grid resizer, per-column alignment, and delete. Boundary cells consume `Tab` without escaping the table.
-- **Inside a fenced code block**: the language tag is an editable input; `↑` / `↓` at the first/last line crosses the fence into surrounding paragraphs.
-- **Auto-pairing** for `[` and `(` — type the opener, get the closer; type the closer over an existing one to skip; `Backspace` removes both.
-- **`[toc]`** on its own line becomes a live table of contents; click an entry to jump.
-
-For a behavior catalog browsable in-app, open [`#/specs`](#/specs).
+Press `⌘/` (or `Ctrl+/`) at any time to toggle between rendered and raw source view.
 
 ## Coverage
 
