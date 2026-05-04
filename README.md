@@ -36,25 +36,25 @@ Press `⌘/` (or `Ctrl+/`) at any time to toggle between rendered and raw source
 
 ## Coverage
 
-Legend: :white_check_mark: stable · :yellow_circle: partial (note explains what's missing) · :pause_button: deferred by design.
+Legend: :white_check_mark: stable · :yellow_circle: partial (note explains what's missing) · :pause_button: todo.
 
 ### Block syntax
 
 | Syntax | Status | Notes |
 |---|:---:|---|
-| paragraph | :white_check_mark: | trailing-space preserved |
+| paragraph | :white_check_mark: | |
 | ATX heading `#`..`######` | :white_check_mark: | |
-| setext heading (`===` / `---` underline) | :white_check_mark: | parser-only; underline shape preserved on save |
-| blockquote `>` | :white_check_mark: | nests, inline marks render inside |
-| bullet list `-` `*` `+` | :white_check_mark: | tight/loose distinction not asserted |
+| setext heading (`===` / `---` underline) | :white_check_mark: | |
+| blockquote `>` | :white_check_mark: | |
+| bullet list `-` `*` `+` | :white_check_mark: | |
 | ordered list `1.` | :white_check_mark: | |
-| nested list | :white_check_mark: | Typora-style 3-step staircase exit |
-| task list `- [ ]` / `- [x]` | :white_check_mark: | click checkbox to toggle |
-| fenced code ```` ``` ```` | :white_check_mark: | editable lang tag, arrow-key crossing |
+| nested list | :white_check_mark: | |
+| task list `- [ ]` / `- [x]` | :white_check_mark: | |
+| fenced code ```` ``` ```` | :white_check_mark: | |
 | indented code (4-space) | :yellow_circle: | parses fine; saves as fenced (shape attr not yet preserved) |
 | thematic break `---` | :white_check_mark: | |
-| table `\| a \| b \|` | :white_check_mark: | alignment, inline marks in cells, floating toolbar |
-| YAML front matter | :white_check_mark: | only at doc start, body text preserved |
+| table `\| a \| b \|` | :white_check_mark: | |
+| YAML front matter | :white_check_mark: | |
 | reference link def `[id]: url` | :yellow_circle: | live entry committed as block; reload drops the def node (markdown-it consumes it on parse) |
 | HTML block | :pause_button: | needs sanitizer policy; planned as opt-in plugin |
 | math block `$$…$$` | :pause_button: | planned as opt-in KaTeX plugin |
@@ -66,13 +66,13 @@ Legend: :white_check_mark: stable · :yellow_circle: partial (note explains what
 | em `*x*` / `_x_` | :white_check_mark: | |
 | strong `**x**` / `__x__` | :white_check_mark: | |
 | nested `***em+strong***` | :yellow_circle: | works only when both runs ≥ 3 chars; full rule-of-three pending |
-| inline code `` `x` `` | :white_check_mark: | variable-length fence supported |
+| inline code `` `x` `` | :white_check_mark: | |
 | strike `~~x~~` | :white_check_mark: | |
 | link `[text](url)` | :yellow_circle: | edge cases: nested `]`, `\]` escape, hrefs with spaces |
 | link with title `[t](u "title")` | :white_check_mark: | |
-| empty-text link `[](url)` | :white_check_mark: | href becomes the visible link text |
-| image `![alt](src)` | :white_check_mark: | async load probe, broken-icon fallback, file-input edit mode |
-| autolink `<https://x.com>` | :white_check_mark: | URL and email; email gets `mailto:` prefix |
+| empty-text link `[](url)` | :white_check_mark: | |
+| image `![alt](src)` | :white_check_mark: | |
+| autolink `<https://x.com>` | :white_check_mark: | |
 | reference-style link `[t][id]` | :yellow_circle: | resolves to inline link on parse; def block is the :yellow_circle: piece |
 | hard break (2-space + `\n`) | :white_check_mark: | |
 | soft break (`\n` in para) | :white_check_mark: | |
@@ -85,30 +85,28 @@ Legend: :white_check_mark: stable · :yellow_circle: partial (note explains what
 | Syntax | Status | Notes |
 |---|:---:|---|
 | highlight `==x==` | :white_check_mark: | |
-| subscript `~x~` | :white_check_mark: | single-tilde only; `~~~x~~~` falls through |
+| subscript `~x~` | :white_check_mark: | |
 | superscript `^x^` | :white_check_mark: | |
-| `[toc]` block | :white_check_mark: | live, click entries to scroll |
-| emoji `:smile:` | :white_check_mark: | autocomplete dropdown while typing `:partial`; Tab/Enter commits |
-| HTML comment `<!-- -->` | :white_check_mark: | rendered as gray italic, always visible |
+| `[toc]` block | :white_check_mark: | |
+| emoji `:smile:` | :white_check_mark: | |
+| HTML comment `<!-- -->` | :white_check_mark: | |
 | diagram fences (mermaid, flow, …) | :pause_button: | planned as opt-in plugin (heavy renderer) |
 
 ### Editor behaviors
 
 | Behavior | Status | Notes |
 |---|:---:|---|
-| cursor-aware delimiter hinting | :white_check_mark: | gray `*` / `==` / `` ` `` etc. when cursor is inside the span |
-| auto-pair brackets | :white_check_mark: | `[`/`(` open, skip-over close, Backspace clears both |
-| lossless `parse → serialize → parse` | :white_check_mark: | enforced by test suite on every commit |
+| cursor-aware delimiter hinting | :white_check_mark: | |
+| auto-pair brackets | :white_check_mark: | |
+| lossless `parse → serialize → parse` | :white_check_mark: | |
 
-## Reading
+## Spec
 
-Markdown looks small and turns out to be deep. These were useful while building this:
+Specs are the project's core design choice and the harness the agent works in. Each Typora behavior is captured as a **spec**: a seed text, a sequence of input events, and the rendered output expected at each checkpoint. Every spec runs directly as a test case; the agent ships a behavior by making the test pass. Describing behaviors this way is what makes a project this size tractable for an agent to build.
 
-- the [CommonMark spec][cm] for the parts everyone agrees on
-- [Typora][typora]'s help docs for the parts only Typora does
-- ProseMirror's [guide][pmguide] for the document and transaction model that makes lossless editing tractable :books:
+The catalog lives at the [`/specs`][demo-specs] page in the live demo, where each card is a spec you can step through.
 
 [demo]: https://yuyz0112.github.io/typora-web/ "live demo"
-[typora]: https://typora.io "Typora"
+[demo-specs]: https://yuyz0112.github.io/typora-web/#/specs "spec catalog"
 [cm]: https://spec.commonmark.org/ "CommonMark"
 [pmguide]: https://prosemirror.net/docs/guide/ "ProseMirror Guide"

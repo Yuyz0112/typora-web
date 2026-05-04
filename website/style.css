@@ -124,7 +124,11 @@ html, body {
 /* Wider page padding under the home so the paper has visible room
  * around it on small screens — the shadow needs negative space to
  * read as elevation. */
-.page-home { padding-top: 16px; padding-bottom: 80px; }
+.page-home {
+  padding-top: 16px;
+  padding-bottom: 80px;
+  max-width: 920px;
+}
 
 .free-dumps { font-size: 12px; color: #999; margin-top: 24px; }
 .free-dumps summary { cursor: pointer; padding: 6px 0; }
@@ -159,6 +163,13 @@ html, body {
   color: #1f1f1f;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+}
+.specs-meta code {
+  font: 12.5px ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: rgba(0, 0, 0, 0.045);
+  padding: 1px 5px;
+  border-radius: 3px;
+  color: #444;
 }
 
 /* Refined filter — sits inline like a search field, hairline below

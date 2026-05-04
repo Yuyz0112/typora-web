@@ -78,10 +78,18 @@ export function specsRoute(root: HTMLElement): () => void {
     <header class="specs-header">
       <h1>Spec</h1>
       <p class="specs-meta">
-        <strong>${totalCases}</strong> behaviors across
+        A spec is a typed object — <code>{ id, label, seed, events[], checkpoints[] }</code>
+        — that the test runner replays through a headless EditorView
+        and compares to the expected rendered output at each checkpoint.
+        The spec is the source of truth; the test case is its compiled
+        form. Edits to <code>specs/features/&lt;name&gt;.specs.ts</code>
+        flow straight into the test suite.
+      </p>
+      <p class="specs-meta">
+        <strong>${totalCases}</strong> specs across
         <strong>${groups.length}</strong> features. Each card replays a
-        scripted event stream; checkpoints below show every step where
-        we pin an exact rendered output.
+        scripted event stream; checkpoint rows below are colored by
+        whether the simulated output matched at mount time.
       </p>
       <div class="specs-toolbar">
         <input
