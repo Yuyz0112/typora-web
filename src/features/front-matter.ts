@@ -151,7 +151,6 @@ export const frontMatter: FeatureSpec = {
               // then move cursor to the position after the block. If the
               // block is the last child of doc, create a new paragraph.
               const tr = state.tr;
-              const blockStart = $from.before();
               const blockEnd = $from.after();
               // Remove the trailing newline.
               tr.delete(blockEnd - 2, blockEnd - 1);

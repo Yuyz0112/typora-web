@@ -1,4 +1,5 @@
 import type { Node as PMNode } from "prosemirror-model";
+import type { NodeSpec } from "prosemirror-model";
 import { liftListItem, splitListItem } from "prosemirror-schema-list";
 import { InputRule } from "prosemirror-inputrules";
 import { Plugin, TextSelection, type Command, type Transaction } from "prosemirror-state";
@@ -20,7 +21,7 @@ const TASK_RE = /^(\[ \]|\[x\]) /;
 // Schema
 // ──────────────────────────────────────────────────────────────────────
 
-const nodes = {
+const nodes: Record<string, NodeSpec> = {
   task_marker: {
     group: "inline",
     inline: true,
@@ -366,7 +367,6 @@ const taskEnter: Command = (state, dispatch, view) => {
   const pStart = $from.before(liDepth) + 2; // li open + p open
 
   if (isTopLevel) {
-    const list = $from.node(liDepth - 1);
     const liIdx = $from.index(liDepth - 1);
     const hasPrev = liIdx > 0;
     if (hasPrev) {
