@@ -5,7 +5,7 @@ import {
   sinkListItem,
   splitListItem,
 } from "prosemirror-schema-list";
-import { TextSelection, type Command } from "prosemirror-state";
+import { Selection, TextSelection, type Command } from "prosemirror-state";
 import type { NodeType } from "prosemirror-model";
 
 import type { FeatureSpec } from "./_types.ts";
@@ -202,6 +202,42 @@ function liftBulletlessParagraphToListItem(li: NodeType): Command {
 //   [PROBABLY WRONG] — structural guess; almost certainly needs tweaking
 //                      after the real implementation lands
 
+// Backspace from an empty top-level textblock whose previous sibling is a
+// list: delete the empty block and place the cursor at the end of the
+// list's deepest last textblock. Matches Typora's behavior — the empty
+// trailing line acts as "press Backspace to slide back into the list",
+// not "lift the empty line into a new outer-list-item" (PM's default).
+export function backspaceJumpIntoPrevList(): Command {
+  return (state, dispatch) => {
+    const { $from, empty } = state.selection;
+    if (!empty) return false;
+    if ($from.depth !== 1) return false;
+    const para = $from.parent;
+    if (!para.isTextblock) return false;
+    if (para.content.size !== 0) return false;
+    const idx = $from.index(0);
+    if (idx === 0) return false;
+    const prev = state.doc.child(idx - 1);
+    if (prev.type.name !== "bullet_list" && prev.type.name !== "ordered_list")
+      return false;
+
+    if (dispatch) {
+      const paraStart = $from.before();
+      const paraEnd = $from.after();
+      const tr = state.tr.delete(paraStart, paraEnd);
+      // After the delete, `prev` is unchanged and now ends at paraStart in
+      // the new doc. Resolve a position just inside its close token and
+      // search backward for a text selection — that lands at the end of
+      // the rightmost textblock the list contains.
+      const $inside = tr.doc.resolve(paraStart - 1);
+      const target = Selection.findFrom($inside, -1, true);
+      if (target) tr.setSelection(target);
+      dispatch(tr);
+    }
+    return true;
+  };
+}
+
 export const list: FeatureSpec = {
   name: "bullet_list",
 
@@ -234,6 +270,7 @@ export const list: FeatureSpec = {
         liftListItem(li),
       ),
       Tab: sinkListItem(li),
+      Backspace: backspaceJumpIntoPrevList(),
     };
   },
 

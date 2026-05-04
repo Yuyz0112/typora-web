@@ -95,6 +95,23 @@ export const listSpecs: FeatureSpecs = {
         { at: 4, expect: "<ul><li>a<ul><li>b</li></ul></li></ul>\n|" },
       ],
     },
+    {
+      id: "backspace-from-empty-para-below-list",
+      label: "Backspace in empty trailing para below a list jumps to deepest last textblock",
+      seed: "- a\n  - b",
+      events: [
+        "<Enter>", "<Enter>", "<Enter>", "<Enter>", // staircase to empty para
+        "<Backspace>",
+      ],
+      checkpoints: [
+        { at: 4, expect: "<ul><li>a<ul><li>b</li></ul></li></ul>\n|" },
+        // PM's default would lift the empty para into a sibling outer
+        // list_item. Typora's behavior — and ours — is: the empty para
+        // is deleted and the cursor lands at the end of the deepest
+        // last textblock in the previous list (here `b`).
+        { at: 5, expect: "<ul><li>a<ul><li>b|</li></ul></li></ul>" },
+      ],
+    },
 
   ],
 };
