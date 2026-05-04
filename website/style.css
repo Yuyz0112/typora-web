@@ -172,6 +172,70 @@ html, body {
   color: #444;
 }
 
+/* Folded "How to write a spec" reference card. Quiet by default; opens
+ * to a dense reference table when the reader wants the syntax. */
+.specs-format {
+  margin: 6px 0 22px;
+  font-size: 13px;
+  color: #666;
+}
+.specs-format > summary {
+  cursor: pointer;
+  padding: 6px 0;
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #888;
+  user-select: none;
+}
+.specs-format > summary::-webkit-details-marker { display: none; }
+.specs-format > summary::before {
+  content: "+";
+  display: inline-block;
+  width: 9px;
+  color: #c5c5c5;
+  font-size: 13px;
+  line-height: 1;
+  text-align: center;
+}
+.specs-format[open] > summary::before { content: "−"; }
+.specs-format-body { margin-top: 8px; }
+.specs-format-body p { margin: 0 0 12px; line-height: 1.55; }
+.specs-format-body ul {
+  margin: 0 0 12px;
+  padding-left: 20px;
+  line-height: 1.6;
+}
+.specs-format-body ul li { margin: 0; }
+.specs-format-body code {
+  font: 12px ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: rgba(0, 0, 0, 0.045);
+  padding: 1px 5px;
+  border-radius: 3px;
+  color: #444;
+}
+.specs-format-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12.5px;
+  margin: 4px 0 0;
+}
+.specs-format-table th,
+.specs-format-table td {
+  text-align: left;
+  padding: 5px 10px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  vertical-align: top;
+}
+.specs-format-table th {
+  font-weight: 500;
+  color: #555;
+  width: 28%;
+}
+.specs-format-table td { color: #666; }
+.specs-format-table tr:last-child td { border-bottom: none; }
+
 /* Refined filter — sits inline like a search field, hairline below
  * only on focus. Quiet at rest, clear when used. */
 .specs-toolbar { margin-bottom: 8px; }
