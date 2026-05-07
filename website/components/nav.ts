@@ -2,7 +2,7 @@
 // `current` argument tells the bar which route to mark active so the
 // router doesn't have to special-case CSS.
 
-const GITHUB = "https://github.com/anthropics/typora-web"; // placeholder; replace with the real URL
+const GITHUB = "https://github.com/yuyz0112/typora-web";
 
 export function mountNav(host: HTMLElement, current: string): void {
   const nav = document.createElement("nav");

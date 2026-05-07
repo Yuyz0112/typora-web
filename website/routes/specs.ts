@@ -14,7 +14,7 @@ import { createCaseCard, type Script, type CaseCard } from "../components/case-c
 import { mountNav } from "../components/nav.ts";
 import { collectCases } from "../../specs/features/index.ts";
 
-const ISSUE_URL = "https://github.com/anthropics/typora-web/issues/new";
+const ISSUE_URL = "https://github.com/yuyz0112/typora-web/issues/new";
 
 // One-line plain-words descriptions per feature. Anything not in the
 // map renders without a description (graceful).

@@ -43,7 +43,7 @@ export type CaseCard = {
   destroy(): void;
 };
 
-const ISSUE_URL = "https://github.com/anthropics/typora-web/issues/new";
+const ISSUE_URL = "https://github.com/yuyz0112/typora-web/issues/new";
 const PLAY_INTERVAL_MS = 250;
 
 function escapeHTML(s: string): string {
