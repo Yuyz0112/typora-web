@@ -8,7 +8,7 @@ const STORAGE_KEY = "typora-web:new:md";
 
 export function newRoute(root: HTMLElement): () => void {
   const main = document.createElement("main");
-  main.className = "page page-new";
+  main.className = "page-new";
   main.innerHTML = `
     <header class="new-menu">
       <a class="brand" href="#/">typora-web</a>
