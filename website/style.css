@@ -113,6 +113,22 @@ html, body {
   max-width: 920px;
 }
 
+/* ─── /new: full-viewport scratch editor ─────────────────────────── */
+/* No nav, no chrome — the editor owns the whole window. The page is
+ * the scroll container; the editor host grows with content. */
+.page-new {
+  width: 100vw;
+  min-height: 100vh;
+  box-sizing: border-box;
+  padding: 48px max(32px, calc((100vw - 820px) / 2));
+  background: #fff;
+}
+.page-new .typora-web-wrap { min-height: calc(100vh - 96px); }
+.page-new .typora-web-source {
+  font: 14px/1.7 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #555;
+}
+
 /* ─── /spec page ──────────────────────────────────────────────────── */
 .specs-header { margin-bottom: 32px; }
 .specs-header h1 {

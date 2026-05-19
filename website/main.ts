@@ -8,6 +8,7 @@ import "./style.css";
 
 import { startRouter } from "./router.ts";
 import { homeRoute } from "./routes/home.ts";
+import { newRoute } from "./routes/new.ts";
 import { specsRoute } from "./routes/specs.ts";
 
 const root = document.querySelector<HTMLDivElement>("#app")!;
@@ -44,5 +45,6 @@ document.addEventListener("click", (e) => {
 
 startRouter(root, [
   { path: "/", handler: homeRoute },
+  { path: "/new", handler: newRoute },
   { path: "/specs", handler: specsRoute },
 ]);
