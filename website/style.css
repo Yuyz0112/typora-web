@@ -161,7 +161,7 @@ html, body {
 .new-menu-actions button:hover { background: #f3f2ee; color: #1f1f1f; }
 .new-editor {
   flex: 1;
-  padding: 48px max(32px, calc((100% - 820px) / 2));
+  padding: 16px max(32px, calc((100% - 820px) / 2)) 48px;
   box-sizing: border-box;
   cursor: text;
 }
