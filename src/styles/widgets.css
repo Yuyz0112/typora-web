@@ -241,6 +241,13 @@
 }
 
 /* ─── Task-list checkbox NodeView ────────────────────────────────── */
+/* Suppress the default list marker on items that carry a checkbox —
+ * the checkbox stands in for the bullet/number. Detect via :has() on
+ * the first child of the leading paragraph; covers both ul and ol. */
+.ProseMirror li:has(> p:first-child > .checkbox-frame:first-child) {
+  list-style: none;
+}
+
 /* Outer wrapper — extends the inline-block to the right with
  * transparent padding so the native caret (which positions itself at
  * the OUTER edge of an inline-block, not past the margin) ends up
